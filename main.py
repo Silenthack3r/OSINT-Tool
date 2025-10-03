@@ -313,7 +313,7 @@ from openai import OpenAI
 from flask import request, jsonify, session
 
 # Put your OpenRouter API key here
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = "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"
 
 # OpenAI-compatible client for OpenRouter
 client = OpenAI(
@@ -365,7 +365,7 @@ def ask_ai():
             model="x-ai/grok-4-fast:free",
             messages=messages,
             extra_headers={
-                "HTTP-Referer": "http://localhost:5000",
+                "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
                 "X-Title": "CyberRecon Dashboard"
             }
         )
