@@ -15,10 +15,6 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 app.secret_key = "supersecretkey" 
 
-
-port = int(os.environ.get("PORT", 5000))
-
-
 data = "main.db"
 SCAN_RESULTS_DB = "scan_results.db"
 
@@ -313,7 +309,8 @@ from openai import OpenAI
 from flask import request, jsonify, session
 
 # Put your OpenRouter API key here
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = API_KEY
+API_KEY = os.environ.get("API_KEY")
 
 # OpenAI-compatible client for OpenRouter
 client = OpenAI(
