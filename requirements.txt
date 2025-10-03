@@ -1,0 +1,4 @@
+flask==2.3.2
+werkzeug==2.3.8
+requests==2.31.0
+openai==1.0.0
