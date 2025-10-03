@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CyberRecon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <style>
+        .clickable-link {
+            color: #4fc3f7;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .clickable-link:hover {
+            color: #29b6f6;
+        }
+        .found-item {
+            color: #4caf50;
+        }
+        .not-found-item {
+            color: #f44336;
+        }
+        .scan-status {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            background: #1a1a1a;
+        }
+        .status-completed {
+            border-left: 4px solid #4caf50;
+        }
+        .status-error {
+            border-left: 4px solid #f44336;
+        }
+        .type-badge {
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 8px;
+            background: #333;
+            color: #888;
+        }
+        .type-badge.profile {
+            background: #1f6feb;
+            color: white;
+        }
+        .type-badge.leak {
+            background: #ff6b6b;
+            color: white;
+        }
+        .type-badge.record {
+            background: #ffa500;
+            color: black;
+        }
+        .darkweb-result {
+            border-left: 3px solid #8b00ff;
+            margin: 5px 0;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Interactive Background Elements -->
+    <div class="interactive-bg">
+        <div class="gradient-orbs orb-1" id="orb1"></div>
+        <div class="gradient-orbs orb-2" id="orb2"></div>
+        <div class="gradient-orbs orb-3" id="orb3"></div>
+        <div class="gradient-orbs orb-4" id="orb4"></div>
+        <div class="grid-overlay"></div>
+    </div>
+    <div class="mouse-follower" id="mouseFollower"></div>
+
+    <!-- Header -->
+    <div class="top-bar">
+        <h2 class="welcome-text">👋 Welcome, <span>{{username}}</span></h2>
+        <div class="settings-container">
+            <div class="settings-icon">⚙️</div>
+            <div class="dropdown">
+                <a href="/report" class="report-link">View Report</a>
+                <a href="/logout">Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+
+        <!-- Dashboard Title -->
+        <h1 class="dashboard-title">CyberRecon Dashboard</h1>
+        <p class="dashboard-subtitle">Your all-in-one OSINT scanning hub</p>
+
+        <!-- Scan Form -->
+        <form action="/scan" method="post" class="scan-form" id="scanForm">
+            <input type="text" name="target" placeholder="Enter Target" class="target-input" required 
+                   value="{{ target if target else '' }}" id="targetInput">
+            
+            <select name="target_type" class="target-type-select" required id="targetTypeSelect" onchange="toggleCountryCode()">
+                <option value="username" selected>Username</option>
+                <option value="fullname">Full Name</option>
+                <option value="email">Email</option>
+                <option value="phone">Phone Number</option>
+            </select>
+
+            <!-- Country Code Selector (Hidden by default) -->
+            <select name="country_code" class="country-code-select" id="countryCodeSelect" style="display: none;">
+                <option value="+93">Afghanistan +93</option>
+                <option value="+355">Albania +355</option>
+                <option value="+213">Algeria +213</option>
+                <option value="+376">Andorra +376</option>
+                <option value="+244">Angola +244</option>
+                <option value="+1">Antigua and Barbuda +1</option>
+                <option value="+54">Argentina +54</option>
+                <option value="+374">Armenia +374</option>
+                <option value="+61">Australia +61</option>
+                <option value="+43">Austria +43</option>
+                <option value="+994">Azerbaijan +994</option>
+                <option value="+973">Bahrain +973</option>
+                <option value="+880">Bangladesh +880</option>
+                <option value="+375">Belarus +375</option>
+                <option value="+32">Belgium +32</option>
+                <option value="+501">Belize +501</option>
+                <option value="+229">Benin +229</option>
+                <option value="+975">Bhutan +975</option>
+                <option value="+591">Bolivia +591</option>
+                <option value="+387">Bosnia and Herzegovina +387</option>
+                <option value="+267">Botswana +267</option>
+                <option value="+55">Brazil +55</option>
+                <option value="+673">Brunei +673</option>
+                <option value="+359">Bulgaria +359</option>
+                <option value="+226">Burkina Faso +226</option>
+                <option value="+257">Burundi +257</option>
+                <option value="+855">Cambodia +855</option>
+                <option value="+237">Cameroon +237</option>
+                <option value="+1">Canada +1</option>
+                <option value="+238">Cape Verde +238</option>
+                <option value="+236">Central African Republic +236</option>
+                <option value="+235">Chad +235</option>
+                <option value="+56">Chile +56</option>
+                <option value="+86">China +86</option>
+                <option value="+57">Colombia +57</option>
+                <option value="+269">Comoros +269</option>
+                <option value="+242">Congo +242</option>
+                <option value="+506">Costa Rica +506</option>
+                <option value="+385">Croatia +385</option>
+                <option value="+53">Cuba +53</option>
+                <option value="+357">Cyprus +357</option>
+                <option value="+420">Czech Republic +420</option>
+                <option value="+243">DR Congo +243</option>
+                <option value="+45">Denmark +45</option>
+                <option value="+253">Djibouti +253</option>
+                <option value="+1">Dominica +1</option>
+                <option value="+1">Dominican Republic +1</option>
+                <option value="+593">Ecuador +593</option>
+                <option value="+20">Egypt +20</option>
+                <option value="+503">El Salvador +503</option>
+                <option value="+240">Equatorial Guinea +240</option>
+                <option value="+291">Eritrea +291</option>
+                <option value="+372">Estonia +372</option>
+                <option value="+251" selected>Ethiopia +251</option>
+                <option value="+679">Fiji +679</option>
+                <option value="+358">Finland +358</option>
+                <option value="+33">France +33</option>
+                <option value="+241">Gabon +241</option>
+                <option value="+220">Gambia +220</option>
+                <option value="+995">Georgia +995</option>
+                <option value="+49">Germany +49</option>
+                <option value="+233">Ghana +233</option>
+                <option value="+30">Greece +30</option>
+                <option value="+1">Grenada +1</option>
+                <option value="+502">Guatemala +502</option>
+                <option value="+224">Guinea +224</option>
+                <option value="+245">Guinea-Bissau +245</option>
+                <option value="+592">Guyana +592</option>
+                <option value="+509">Haiti +509</option>
+                <option value="+504">Honduras +504</option>
+                <option value="+36">Hungary +36</option>
+                <option value="+354">Iceland +354</option>
+                <option value="+91">India +91</option>
+                <option value="+62">Indonesia +62</option>
+                <option value="+98">Iran +98</option>
+                <option value="+964">Iraq +964</option>
+                <option value="+353">Ireland +353</option>
+                <option value="+972">Israel +972</option>
+                <option value="+39">Italy +39</option>
+                <option value="+1">Jamaica +1</option>
+                <option value="+81">Japan +81</option>
+                <option value="+962">Jordan +962</option>
+                <option value="+7">Kazakhstan +7</option>
+                <option value="+254">Kenya +254</option>
+                <option value="+686">Kiribati +686</option>
+                <option value="+965">Kuwait +965</option>
+                <option value="+996">Kyrgyzstan +996</option>
+                <option value="+856">Laos +856</option>
+                <option value="+371">Latvia +371</option>
+                <option value="+961">Lebanon +961</option>
+                <option value="+266">Lesotho +266</option>
+                <option value="+231">Liberia +231</option>
+                <option value="+218">Libya +218</option>
+                <option value="+423">Liechtenstein +423</option>
+                <option value="+370">Lithuania +370</option>
+                <option value="+352">Luxembourg +352</option>
+                <option value="+261">Madagascar +261</option>
+                <option value="+265">Malawi +265</option>
+                <option value="+60">Malaysia +60</option>
+                <option value="+960">Maldives +960</option>
+                <option value="+223">Mali +223</option>
+                <option value="+356">Malta +356</option>
+                <option value="+692">Marshall Islands +692</option>
+                <option value="+222">Mauritania +222</option>
+                <option value="+230">Mauritius +230</option>
+                <option value="+52">Mexico +52</option>
+                <option value="+691">Micronesia +691</option>
+                <option value="+373">Moldova +373</option>
+                <option value="+377">Monaco +377</option>
+                <option value="+976">Mongolia +976</option>
+                <option value="+382">Montenegro +382</option>
+                <option value="+212">Morocco +212</option>
+                <option value="+258">Mozambique +258</option>
+                <option value="+95">Myanmar +95</option>
+                <option value="+264">Namibia +264</option>
+                <option value="+674">Nauru +674</option>
+                <option value="+977">Nepal +977</option>
+                <option value="+31">Netherlands +31</option>
+                <option value="+64">New Zealand +64</option>
+                <option value="+505">Nicaragua +505</option>
+                <option value="+227">Niger +227</option>
+                <option value="+234">Nigeria +234</option>
+                <option value="+850">North Korea +850</option>
+                <option value="+47">Norway +47</option>
+                <option value="+968">Oman +968</option>
+                <option value="+92">Pakistan +92</option>
+                <option value="+680">Palau +680</option>
+                <option value="+970">Palestine +970</option>
+                <option value="+507">Panama +507</option>
+                <option value="+675">Papua New Guinea +675</option>
+                <option value="+595">Paraguay +595</option>
+                <option value="+51">Peru +51</option>
+                <option value="+63">Philippines +63</option>
+                <option value="+48">Poland +48</option>
+                <option value="+351">Portugal +351</option>
+                <option value="+1">Puerto Rico +1</option>
+                <option value="+974">Qatar +974</option>
+                <option value="+40">Romania +40</option>
+                <option value="+7">Russia +7</option>
+                <option value="+250">Rwanda +250</option>
+                <option value="+685">Samoa +685</option>
+                <option value="+378">San Marino +378</option>
+                <option value="+239">Sao Tome and Principe +239</option>
+                <option value="+966">Saudi Arabia +966</option>
+                <option value="+221">Senegal +221</option>
+                <option value="+381">Serbia +381</option>
+                <option value="+248">Seychelles +248</option>
+                <option value="+232">Sierra Leone +232</option>
+                <option value="+65">Singapore +65</option>
+                <option value="+421">Slovakia +421</option>
+                <option value="+386">Slovenia +386</option>
+                <option value="+677">Solomon Islands +677</option>
+                <option value="+252">Somalia +252</option>
+                <option value="+27">South Africa +27</option>
+                <option value="+82">South Korea +82</option>
+                <option value="+211">South Sudan +211</option>
+                <option value="+34">Spain +34</option>
+                <option value="+94">Sri Lanka +94</option>
+                <option value="+249">Sudan +249</option>
+                <option value="+597">Suriname +597</option>
+                <option value="+268">Swaziland +268</option>
+                <option value="+46">Sweden +46</option>
+                <option value="+41">Switzerland +41</option>
+                <option value="+963">Syria +963</option>
+                <option value="+886">Taiwan +886</option>
+                <option value="+992">Tajikistan +992</option>
+                <option value="+255">Tanzania +255</option>
+                <option value="+66">Thailand +66</option>
+                <option value="+228">Togo +228</option>
+                <option value="+676">Tonga +676</option>
+                <option value="+1">Trinidad and Tobago +1</option>
+                <option value="+216">Tunisia +216</option>
+                <option value="+90">Turkey +90</option>
+                <option value="+993">Turkmenistan +993</option>
+                <option value="+1">Turks and Caicos Islands +1</option>
+                <option value="+688">Tuvalu +688</option>
+                <option value="+256">Uganda +256</option>
+                <option value="+380">Ukraine +380</option>
+                <option value="+971">United Arab Emirates +971</option>
+                <option value="+44">United Kingdom +44</option>
+                <option value="+1">United States +1</option>
+                <option value="+598">Uruguay +598</option>
+                <option value="+998">Uzbekistan +998</option>
+                <option value="+678">Vanuatu +678</option>
+                <option value="+379">Vatican City +379</option>
+                <option value="+58">Venezuela +58</option>
+                <option value="+84">Vietnam +84</option>
+                <option value="+967">Yemen +967</option>
+                <option value="+260">Zambia +260</option>
+                <option value="+263">Zimbabwe +263</option>
+            </select>
+
+            <select name="scan_type" class="scan-select" required>
+                <option value="clean" selected>Clean Web</option>
+                <option value="dark">Dark Web</option>
+            </select>
+            
+            <button type="submit" class="scan-btn">🚀 Start Scan</button>
+        </form>
+
+        <script>
+        function toggleCountryCode() {
+            const targetType = document.getElementById('targetTypeSelect').value;
+            const countryCodeSelect = document.getElementById('countryCodeSelect');
+            const targetInput = document.getElementById('targetInput');
+            
+            if (targetType === 'phone') {
+                countryCodeSelect.style.display = 'block';
+                targetInput.placeholder = "Enter phone number (e.g., 912312122)";
+            } else {
+                countryCodeSelect.style.display = 'none';
+                targetInput.placeholder = "Enter Target";
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleCountryCode();
+        });
+        </script>
+
+        <!-- Scan Results Container (Terminal Style) -->
+        <div class="scan-results-container">
+            <div class="terminal-header">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span class="term-title">Scan Terminal</span>
+                {% if results %}
+                <a href="/report" class="report-btn">📊 View Full Report</a>
+                {% endif %}
+            </div>
+            <div class="terminal-body" id="scan-results">
+                {% if results %}
+                    {% if results.status %}
+                    <div class="scan-status status-{{ results.status }}">
+                        <strong>Scan Status:</strong> {{ results.status|upper }}<br>
+                        <strong>Target:</strong> {{ results.target }}<br>
+                        {% if results.sites %}
+                        <strong>Results Found:</strong> {{ results.sites|selectattr("found")|list|length }} sites
+                        {% endif %}
+                        {% if results.summary %}
+                        <br><strong>Summary:</strong> 
+                        {% if results.summary.darkweb_results_found is defined %}
+                            {{ results.summary.darkweb_results_found }} dark web results,
+                            {{ results.summary.leaks_found }} leaks,
+                            {{ results.summary.onion_services_with_results }}/{{ results.summary.onion_services_checked }} onion services
+                        {% else %}
+                            {{ results.summary.profiles_found }} profiles, 
+                            {{ results.summary.leaks_found }} leaks,
+                            {{ results.summary.records_found }} records
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if results.error %}
+                    <div class="scan-status status-error">
+                        <strong>Error:</strong> {{ results.error }}
+                    </div>
+                    {% endif %}
+
+                    {% if results.sites %}
+                    <h3 class="prompt">Discovered Profiles:</h3>
+                    <ul class="sites-list">
+                        {% for site in results.sites %}
+                        <li class="site-item {% if site.found %}found-item{% else %}not-found-item{% endif %}">
+                            <strong>{{ site.site }}:</strong>
+                            {% if site.found and site.url %}
+                                <a href="{{ site.url }}" target="_blank" class="clickable-link">
+                                    {% if site.title and site.title != site.url %}
+                                        {{ site.title }}
+                                    {% else %}
+                                        {{ site.url }}
+                                    {% endif %}
+                                </a>
+                                {% if site.type %}
+                                <span class="type-badge {{ site.type }}">{{ site.type|upper }}</span>
+                                {% endif %}
+                                <span class="status-badge">✓ FOUND</span>
+                            {% else %}
+                                <span class="url-text">Not found</span>
+                                <span class="status-badge">✗ NOT FOUND</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Dark Web Results -->
+                    {% if results.darkweb_results %}
+                    <h3 class="prompt">Dark Web Results:</h3>
+                    <ul class="sites-list">
+                        {% for result in results.darkweb_results %}
+                        <li class="site-item found-item darkweb-result">
+                            <strong>{{ result.engine }}:</strong>
+                            {% if result.link %}
+                                <a href="{{ result.link }}" target="_blank" class="clickable-link">
+                                    {{ result.title|default('Dark Web Link') }}
+                                </a>
+                            {% else %}
+                                <span class="url-text">{{ result.title|default('Dark Web Result') }}</span>
+                            {% endif %}
+                            <span class="type-badge leak">DARK WEB</span>
+                            <span class="status-badge">✓ FOUND</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Leaks Found -->
+                    {% if results.leaks_found %}
+                    <h3 class="prompt">Leaks Found:</h3>
+                    <ul class="sites-list">
+                        {% for leak in results.leaks_found %}
+                        <li class="site-item found-item">
+                            <strong>{{ leak.source }}:</strong>
+                            {{ leak.username }}@{{ leak.domain }}
+                            <span class="type-badge leak">LEAK</span>
+                            <span class="status-badge">✓ FOUND</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Onion Service Results -->
+                    {% if results.onion_service_results %}
+                    <h3 class="prompt">Onion Service Results:</h3>
+                    <ul class="sites-list">
+                        {% for service, result in results.onion_service_results.items() %}
+                        <li class="site-item {% if result.found %}found-item{% else %}not-found-item{% endif %}">
+                            <strong>{{ service }}:</strong>
+                            {{ result.details }}
+                            <span class="status-badge">{% if result.found %}✓ FOUND{% else %}✗ NOT FOUND{% endif %}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Generic Results Display -->
+                    {% if not results.sites and not results.darkweb_results and not results.leaks_found and not results.onion_service_results and not results.error %}
+                    <h3 class="prompt">Scan Results for "{{target}}":</h3>
+                    <div class="scan-status status-completed">
+                        <strong>Scan completed but no specific results to display.</strong><br>
+                        Check the summary above for details.
+                    </div>
+                    {% endif %}
+
+                {% elif recent_scan %}
+                    <div class="scan-status status-completed">
+                        <strong>Last Scan Loaded:</strong> {{ recent_scan.target }}<br>
+                        <strong>Status:</strong> {{ recent_scan.status|upper }}<br>
+                        <a href="/report" class="clickable-link">View full report</a>
+                    </div>
+                {% else %}
+                    <p class="waiting">[+] Waiting for target input...</p>
+                    <p class="hint">Enter a target above and click "Start Scan" to begin OSINT reconnaissance.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- AI Assistant Container -->
+        <div class="ai-box">
+            <div class="ai-header">🤖 AI Assistant</div>
+            <div class="ai-body" id="ai-response">
+                {% if results or recent_scan %}
+                <p class="waiting">Ask me about the scan results...</p>
+                {% else %}
+                <p class="waiting">Run a scan first to ask questions about the results...</p>
+                {% endif %}
+            </div>
+            <form id="ai-form" class="ai-form">
+                <input type="text" id="ai-input" placeholder="Ask AI a question..." 
+                       {% if not results and not recent_scan %}disabled{% endif %} required>
+                <button type="submit" {% if not results and not recent_scan %}disabled{% endif %}>Send</button>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>© 2025 CyberRecon — Created by Team BNKY Four | All Rights Reserved</p>
+    </footer>
+
+    <script>
+    document.getElementById("ai-form").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const question = document.getElementById("ai-input").value;
+        const responseBox = document.getElementById("ai-response");
+
+        if (!question.trim()) return;
+
+        // Show your message
+        const userMsg = document.createElement("div");
+        userMsg.classList.add("chat-message", "user");
+        userMsg.textContent = "You: " + question;
+        responseBox.appendChild(userMsg);
+
+        // Show placeholder for AI response
+        const aiMsg = document.createElement("div");
+        aiMsg.classList.add("chat-message", "ai");
+        aiMsg.textContent = "AI: Thinking...";
+        responseBox.appendChild(aiMsg);
+
+        // Auto scroll to bottom
+        responseBox.scrollTop = responseBox.scrollHeight;
+
+        // Clear previous waiting message if it exists
+        const waitingMsg = responseBox.querySelector('.waiting');
+        if (waitingMsg) {
+            waitingMsg.remove();
+        }
+
+        try {
+            const res = await fetch("/ask_ai", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question: question })
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                aiMsg.textContent = "AI: Error - " + data.error;
+                aiMsg.style.color = "#f44336";
+            } else {
+                aiMsg.textContent = "AI: " + data.answer;
+                aiMsg.style.color = "#4caf50";
+            }
+        } catch (err) {
+            aiMsg.textContent = "AI: Request failed - " + err.message;
+            aiMsg.style.color = "#f44336";
+        }
+
+        // Clear input
+        document.getElementById("ai-input").value = "";
+        
+        // Auto scroll to bottom again after response
+        responseBox.scrollTop = responseBox.scrollHeight;
+    });
+
+    // Interactive Background Effects
+    document.addEventListener('DOMContentLoaded', function() {
+        const orb1 = document.getElementById('orb1');
+        const orb2 = document.getElementById('orb2');
+        const orb3 = document.getElementById('orb3');
+        const orb4 = document.getElementById('orb4');
+        const mouseFollower = document.getElementById('mouseFollower');
+        
+        let mouseX = 0;
+        let mouseY = 0;
+        let followerX = 0;
+        let followerY = 0;
+        
+        // Mouse move listener
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Move orbs with parallax effect
+            if (orb1) orb1.style.transform = `translate(${(mouseX - window.innerWidth/2) * 0.02}px, ${(mouseY - window.innerHeight/2) * 0.02}px)`;
+            if (orb2) orb2.style.transform = `translate(${(mouseX - window.innerWidth/2) * -0.03}px, ${(mouseY - window.innerHeight/2) * -0.03}px)`;
+            if (orb3) orb3.style.transform = `translate(${(mouseX - window.innerWidth/2) * 0.04}px, ${(mouseY - window.innerHeight/2) * -0.02}px)`;
+            if (orb4) orb4.style.transform = `translate(${(mouseX - window.innerWidth/2) * -0.02}px, ${(mouseY - window.innerHeight/2) * 0.04}px)`;
+        });
+        
+        // Smooth mouse follower
+        function animateFollower() {
+            followerX += (mouseX - followerX) * 0.1;
+            followerY += (mouseY - followerY) * 0.1;
+            
+            if (mouseFollower) {
+                mouseFollower.style.left = followerX + 'px';
+                mouseFollower.style.top = followerY + 'px';
+            }
+            
+            requestAnimationFrame(animateFollower);
+        }
+        
+        animateFollower();
+        
+        // Create floating particles
+        function createParticles() {
+            const particlesContainer = document.querySelector('.interactive-bg');
+            if (!particlesContainer) return;
+            
+            for (let i = 0; i < 15; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.top = Math.random() * 100 + 'vh';
+                particle.style.animationDelay = Math.random() * 3 + 's';
+                particle.style.animationDuration = (3 + Math.random() * 2) + 's';
+                particlesContainer.appendChild(particle);
+            }
+        }
+        
+        createParticles();
+        
+        // Interactive hover effects on cards
+        const interactiveElements = document.querySelectorAll('.scan-results-container, .ai-box, .scan-form');
+        
+        interactiveElements.forEach(element => {
+            element.addEventListener('mouseenter', () => {
+                element.style.transform = 'translateY(-2px)';
+                element.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+            });
+            
+            element.addEventListener('mouseleave', () => {
+                element.style.transform = 'translateY(0)';
+                element.style.boxShadow = '';
+            });
+        });
+
+        // Enable form if scan results become available
+        function checkScanResults() {
+            const hasResults = {{ (results or recent_scan)|tojson|safe }};
+            const aiInput = document.getElementById("ai-input");
+            const aiButton = document.querySelector("#ai-form button");
+            
+            if (hasResults && hasResults !== 'null') {
+                aiInput.disabled = false;
+                aiButton.disabled = false;
+                aiInput.placeholder = "Ask AI about the scan results...";
+            }
+        }
+        
+        // Check on page load
+        checkScanResults();
+    });
+    </script>
+
+</body>
+</html>
