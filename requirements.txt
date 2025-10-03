@@ -10,3 +10,4 @@ beautifulsoup4
 dnspython
 python-whois
 phonenumbers
+bs4
