@@ -313,7 +313,7 @@ from openai import OpenAI
 from flask import request, jsonify, session
 
 # Put your OpenRouter API key here
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = "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"
 
 # OpenAI-compatible client for OpenRouter
 client = OpenAI(
