@@ -1,7 +1,11 @@
-flask==2.3.2
-werkzeug==2.3.8
-requests==2.31.0
-openai==1.0.0
+flask
+requests
+openai
+beautifulsoup4
+dnspython
+python-whois
+phonenumbers
+bs4
 flask
 werkzeug
 requests
@@ -10,4 +14,4 @@ beautifulsoup4
 dnspython
 python-whois
 phonenumbers
-bs4
+httpx
