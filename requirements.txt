@@ -1,0 +1,17 @@
+flask
+requests
+openai
+beautifulsoup4
+dnspython
+python-whois
+phonenumbers
+bs4
+flask
+werkzeug
+requests
+openai
+beautifulsoup4
+dnspython
+python-whois
+phonenumbers
+httpx

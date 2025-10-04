@@ -309,7 +309,9 @@ from openai import OpenAI
 from flask import request, jsonify, session
 
 # Put your OpenRouter API key here
-OPENROUTER_API_KEY = "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"
+API_KEY = os.environ.get("API_KEY")
+OPENROUTER_API_KEY = API_KEY
+
 
 # OpenAI-compatible client for OpenRouter
 client = OpenAI(
@@ -358,10 +360,10 @@ def ask_ai():
 
     try:
         completion = client.chat.completions.create(
-            model="x-ai/grok-4-fast:free",
+            model="deepseek/deepseek-chat-v3.1:free",
             messages=messages,
             extra_headers={
-                "HTTP-Referer": "http://localhost:5000",
+                "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
                 "X-Title": "CyberRecon Dashboard"
             }
         )
@@ -401,4 +403,5 @@ def report():
 
 #To run say false if you want
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
