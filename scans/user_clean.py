@@ -97,35 +97,62 @@ def check_site(username, sitename, info):
                     allow_redirects=True
                 )
 
-            found = False
+            # Determine whether the profile exists based on status codes and/or
+            # presence of site-specific error messages. Some sites return a
+            # 200 status even for missing users (custom error pages), so we
+            # always check `errorMsg` when provided to avoid false positives.
             error_type = info.get("errorType", "status_code")
+            error_msg = info.get("errorMsg", "")
+
+            # Normalize error message check into a boolean that indicates the
+            # response contains a NOT-FOUND indication from the site.
+            # Optimization: if the response is very large, only scan the first
+            # and last slices (where not-found markers usually appear). Use
+            # lowercase matching to avoid repeated case conversions.
+            contains_error = False
+            try:
+                resp_text = response.text or ""
+                # Choose a snippet for large responses to avoid scanning huge HTML
+                if len(resp_text) > 20000:
+                    snippet = (resp_text[:10000] + resp_text[-10000:]).lower()
+                else:
+                    snippet = resp_text.lower()
+
+                if isinstance(error_msg, list):
+                    for msg in error_msg:
+                        if not msg:
+                            continue
+                        if msg.lower() in snippet:
+                            contains_error = True
+                            break
+                elif error_msg:
+                    contains_error = (error_msg.lower() in snippet)
+            except Exception:
+                contains_error = False
+
+            found = False
 
             if error_type == "status_code":
-                # 200 status usually means found, 404 means not found
-                if response.status_code == 200:
-                    found = True
-                elif response.status_code == 404:
+                # If server explicitly returns 404, treat as not found.
+                if response.status_code == 404:
                     found = False
+                # If 200, consider it found only when the page does NOT contain
+                # a known not-found message.
+                elif response.status_code == 200:
+                    found = not contains_error
                 else:
-                    # For other status codes, check content
-                    error_msg = info.get("errorMsg", "")
-                    if isinstance(error_msg, list):
-                        if not any(msg in response.text for msg in error_msg):
-                            found = True
-                    elif error_msg and error_msg not in response.text:
-                        found = True
+                    # For other status codes, rely on content if available;
+                    # if there's no not-found message and the status is < 400,
+                    # treat as found; otherwise treat as not found.
+                    if contains_error:
+                        found = False
+                    else:
+                        found = (response.status_code < 400)
 
             elif error_type == "message":
-                error_msg = info.get("errorMsg", "")
-                if isinstance(error_msg, list):
-                    if not any(msg in response.text for msg in error_msg):
-                        found = True
-                elif error_msg and error_msg not in response.text:
-                    found = True
-
-            # Additional check for response content
-            if found and response.status_code != 200:
-                found = False
+                # If the site uses message-based detection, it's found when
+                # the response does NOT contain an error message.
+                found = not contains_error
 
             if found:
                 return {
