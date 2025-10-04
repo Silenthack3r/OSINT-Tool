@@ -308,6 +308,8 @@ def scan():
 from openai import OpenAI
 from flask import request, jsonify, session
 
+openai.proxy = None
+
 # Put your OpenRouter API key here
 API_KEY = os.environ.get("API_KEY")
 OPENROUTER_API_KEY = API_KEY
