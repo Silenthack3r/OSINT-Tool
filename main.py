@@ -308,8 +308,6 @@ def scan():
 from openai import OpenAI
 from flask import request, jsonify, session
 
-openai.proxy = None
-
 # Put your OpenRouter API key here
 API_KEY = os.environ.get("API_KEY")
 OPENROUTER_API_KEY = API_KEY
@@ -362,7 +360,7 @@ def ask_ai():
 
     try:
         completion = client.chat.completions.create(
-            model="x-ai/grok-4-fast:free",
+            model="deepseek/deepseek-chat-v3.1:free",
             messages=messages,
             extra_headers={
                 "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
