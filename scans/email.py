@@ -182,14 +182,11 @@ class AdvancedEmailOSINT:
             ("Facebook", f"https://www.facebook.com/{quote_plus(self.email)}", "social"),
             ("LinkedIn", f"https://www.linkedin.com/in/{quote_plus(self.email.split('@')[0])}", "professional"),
             ("Twitter", f"https://twitter.com/{quote_plus(self.email.split('@')[0])}", "social"),
-            ("Instagram", f"https://instagram.com/{quote_plus(self.email.split('@')[0])}", "social"),
             ("GitHub", f"https://github.com/{quote_plus(self.email.split('@')[0])}", "technical"),
             ("GitLab", f"https://gitlab.com/{quote_plus(self.email.split('@')[0])}", "technical"),
             ("Reddit", f"https://reddit.com/user/{quote_plus(self.email.split('@')[0])}", "social"),
             ("Pinterest", f"https://pinterest.com/{quote_plus(self.email.split('@')[0])}", "social"),
             ("TikTok", f"https://tiktok.com/@{quote_plus(self.email.split('@')[0])}", "social"),
-            ("Twitch", f"https://twitch.tv/{quote_plus(self.email.split('@')[0])}", "entertainment"),
-            ("Spotify", f"https://open.spotify.com/user/{quote_plus(self.email.split('@')[0])}", "entertainment"),
             ("YouTube", f"https://youtube.com/@{quote_plus(self.email.split('@')[0])}", "entertainment"),
             ("Medium", f"https://medium.com/@{quote_plus(self.email.split('@')[0])}", "blogging"),
             ("Keybase", f"https://keybase.io/{quote_plus(self.email.split('@')[0])}", "crypto"),
@@ -282,7 +279,6 @@ class AdvancedEmailOSINT:
     def intelligence_search_engines(self):
         """Search intelligence and data breach platforms"""
         intel_services = [
-            ("IntelligenceX", f"https://intelx.io/?s={quote_plus(self.email)}"),
             ("Epieos", f"https://epieos.com/?q={quote_plus(self.email)}"),
             ("Skymem", f"https://www.skymem.info/srch?q={quote_plus(self.email)}"),
             ("ThatsThem", f"https://thatsthem.com/email/{quote_plus(self.email)}"),

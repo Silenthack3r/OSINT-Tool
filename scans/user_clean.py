@@ -3,6 +3,9 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import re
+from urllib.parse import urlparse
+from uuid import uuid4
+import difflib
 
 # Get the directory where this script is located
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -63,21 +66,39 @@ def check_site(username, sitename, info):
     if not check_username_regex(username, regex_pattern):
         return {"site": sitename, "url": info["url"].format(username), "found": False, "reason": "regex_fail"}
 
-    urls_to_try = [info["url"].format(username)]  # original username
-    
+    # Build list of (url, probe_username) so POST payloads can use the
+    # correct username variant when substituting. This prevents mismatch
+    # between URL and payload which can lead to false positives.
+    urls_to_try = [(info["url"].format(username), username)]
+
     # Add mutated usernames if no regex restriction
     if not regex_pattern:
         for variant in mutate_username(username):
-            urls_to_try.append(info["url"].format(variant))
+            urls_to_try.append((info["url"].format(variant), variant))
 
-    for url in urls_to_try:
+    # Optional probe cache for baseline (helps detect sites that return a
+    # generic page for missing users). Controlled per-site via
+    # `info["probe"] = True` to avoid extra requests unless configured.
+    PROBE_CACHE = globals().get("_USER_CLEAN_PROBE_CACHE")
+    if PROBE_CACHE is None:
+        PROBE_CACHE = {}
+        globals()["_USER_CLEAN_PROBE_CACHE"] = PROBE_CACHE
+
+    for url, probe_username in urls_to_try:
         try:
             # Handle special request types
             if info.get("request_method") == "POST":
                 if "request_payload" in info:
                     payload = info["request_payload"]
-                    # Replace username placeholder in payload
-                    payload_str = json.dumps(payload).replace("{}", username)
+                    # Replace username placeholder in payload. Support
+                    # a clearer placeholder `{username}`; fall back to
+                    # `{}` if necessary. Use the probe_username (the
+                    # variant we're testing), not the original username.
+                    payload_str = json.dumps(payload)
+                    if "{username}" in payload_str:
+                        payload_str = payload_str.replace("{username}", probe_username)
+                    else:
+                        payload_str = payload_str.replace("{}", probe_username)
                     payload = json.loads(payload_str)
                     response = requests.post(
                         info.get("urlProbe", url),
@@ -96,6 +117,30 @@ def check_site(username, sitename, info):
                     timeout=10, 
                     allow_redirects=True
                 )
+
+            # Redirect heuristic: if the request ended up at the site root
+            # or a login/dashboard path, it's likely a generic page and not
+            # a profile. Sites can override via `invalidRedirects`.
+            try:
+                orig = urlparse(url)
+                final = urlparse(response.url)
+                invalid_redirects = info.get("invalidRedirects", [])
+                redirected_to_generic = False
+                if response.url != url and orig.netloc == final.netloc:
+                    path = (final.path or "/").lower()
+                    if path in ["/", ""] or any(p in path for p in ["login", "signin", "signup", "dashboard"]):
+                        redirected_to_generic = True
+                    if any(pat in response.url for pat in invalid_redirects):
+                        redirected_to_generic = True
+
+                if redirected_to_generic:
+                    # Treat as not found for this probe/variant and continue
+                    if info.get("debug", False):
+                        print(f"Redirected to generic page for {sitename}: {response.url}")
+                    continue
+            except Exception:
+                # Non-fatal; proceed to content checks
+                pass
 
             # Determine whether the profile exists based on status codes and/or
             # presence of site-specific error messages. Some sites return a
@@ -155,6 +200,47 @@ def check_site(username, sitename, info):
                 found = not contains_error
 
             if found:
+                # Optional probe-based baseline comparison: if enabled for the
+                # site, compare the response snippet to a cached random-probe
+                # snippet. If they're nearly identical, it's likely a generic
+                # not-found page.
+                try:
+                    if info.get("probe", False):
+                        cache_key = sitename
+                        baseline = PROBE_CACHE.get(cache_key)
+                        if baseline is None:
+                            # perform a lightweight probe and cache its snippet
+                            probe_name = f"__probe_{uuid4().hex}__"
+                            probe_url = info["url"].format(probe_name)
+                            try:
+                                probe_resp = requests.get(probe_url, headers=HEADERS, timeout=10, allow_redirects=True)
+                                probe_text = (probe_resp.text or "")
+                                if len(probe_text) > 20000:
+                                    baseline_snip = (probe_text[:10000] + probe_text[-10000:]).lower()
+                                else:
+                                    baseline_snip = probe_text.lower()
+                                PROBE_CACHE[cache_key] = baseline_snip
+                                baseline = baseline_snip
+                            except Exception:
+                                baseline = None
+
+                        if baseline:
+                            # Compare snippets; if very similar, treat as not found
+                            cur_text = resp_text if 'resp_text' in locals() else (response.text or "")
+                            if len(cur_text) > 20000:
+                                cur_snip = (cur_text[:10000] + cur_text[-10000:]).lower()
+                            else:
+                                cur_snip = cur_text.lower()
+                            try:
+                                ratio = difflib.SequenceMatcher(None, baseline, cur_snip).ratio()
+                                if ratio > 0.95:
+                                    if info.get("debug", False):
+                                        print(f"Probe match ({ratio:.2f}) for {sitename}; treating as not found")
+                                    continue
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
                 return {
                     "site": sitename, 
                     "url": url, 

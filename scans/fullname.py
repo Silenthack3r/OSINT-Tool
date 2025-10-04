@@ -15,6 +15,35 @@ from urllib.parse import quote_plus, unquote, urlparse
 from bs4 import BeautifulSoup
 import re
 import os
+import difflib
+
+
+def _get_snippet(text, max_full=20000, head_tail=10000):
+    if not text:
+        return ""
+    try:
+        if len(text) > max_full:
+            return (text[:head_tail] + text[-head_tail:]).lower()
+        return text.lower()
+    except Exception:
+        return text.lower() if text else ""
+
+
+def _is_generic_redirect(orig_url, final_url, invalid_redirects=None):
+    try:
+        o = urlparse(orig_url)
+        f = urlparse(final_url)
+        if o.netloc == f.netloc:
+            path = (f.path or "/").lower()
+            if path in ["/", ""] or any(p in path for p in ["login", "signin", "signup", "dashboard"]):
+                return True
+        if invalid_redirects:
+            for pat in invalid_redirects:
+                if pat in final_url:
+                    return True
+    except Exception:
+        return False
+    return False
 
 # ---- Config ----
 USER_AGENTS = [
@@ -86,6 +115,8 @@ def search_duckduckgo(query: str, max_results: int = 20) -> list:
         results = []
         url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
         response = requests.get(url, headers=get_headers(), timeout=REQUESTS_TIMEOUT)
+        if _is_generic_redirect(url, getattr(response, 'url', '')):
+            return []
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Find result containers
@@ -204,7 +235,7 @@ def search_people_search_engines(name: str) -> list:
     def check_people_engine(engine_name, url):
         try:
             response = requests.get(url, headers=get_headers(), timeout=10)
-            if response.status_code == 200 and name.lower() in response.text.lower():
+            if response.status_code == 200 and name.lower() in _get_snippet(response.text):
                 return {
                     "site": engine_name,
                     "title": f"{name} - {engine_name} Record",

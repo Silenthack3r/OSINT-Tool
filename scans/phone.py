@@ -6,6 +6,49 @@ import phonenumbers
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+
+
+def _get_snippet(text, max_full=20000, head_tail=10000):
+    """Return a lowercase snippet for fast substring checks.
+    For very large bodies, only keep the first+last slices to avoid scanning
+    the entire HTML document.
+    """
+    if not text:
+        return ""
+    try:
+        if len(text) > max_full:
+            return (text[:head_tail] + text[-head_tail:]).lower()
+        return text.lower()
+    except Exception:
+        return text.lower() if text else ""
+
+
+def _contains_any(text, patterns):
+    s = _get_snippet(text)
+    for p in patterns:
+        if not p:
+            continue
+        if p.lower() in s:
+            return True
+    return False
+
+
+def _is_generic_redirect(orig_url, final_url, invalid_redirects=None):
+    try:
+        orig = urlparse(orig_url)
+        final = urlparse(final_url)
+        if orig.netloc == final.netloc:
+            path = (final.path or "/").lower()
+            if path in ["/", ""] or any(p in path for p in ["login", "signin", "signup", "dashboard"]):
+                return True
+        if invalid_redirects:
+            for pat in invalid_redirects:
+                if pat in final.geturl():
+                    return True
+    except Exception:
+        return False
+    return False
 
 # Configuration
 REQUEST_TIMEOUT = 20
@@ -160,7 +203,7 @@ class AdvancedPhoneOSINT:
             response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
             
             if response.status_code == 200:
-                if "not found" not in response.text.lower() and "error" not in response.text.lower():
+                if not _contains_any(response.text, ["not found", "error"]):
                     # Extract information from Numspy
                     soup = BeautifulSoup(response.text, 'html.parser')
                     
@@ -368,7 +411,11 @@ class AdvancedPhoneOSINT:
                 
                 response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
                 if response.status_code == 200:
-                    # Advanced pattern matching for account existence
+                    # Redirect heuristic
+                    if _is_generic_redirect(url, response.url):
+                        return None
+
+                    # Advanced pattern matching for account existence (use snippet)
                     positive_indicators = [
                         'account', 'profile', 'user', 'found', 'exists', 'recover',
                         'log in', 'sign in', 'phone number'
@@ -378,9 +425,9 @@ class AdvancedPhoneOSINT:
                         'not found', 'no account', 'invalid', 'error'
                     ]
                     
-                    text_lower = response.text.lower()
-                    positive_score = sum(1 for ind in positive_indicators if ind in text_lower)
-                    negative_score = sum(1 for ind in negative_indicators if ind in text_lower)
+                    snippet = _get_snippet(response.text)
+                    positive_score = sum(1 for ind in positive_indicators if ind in snippet)
+                    negative_score = sum(1 for ind in negative_indicators if ind in snippet)
                     
                     if positive_score > negative_score:
                         return {
