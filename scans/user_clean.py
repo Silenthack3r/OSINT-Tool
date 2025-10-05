@@ -142,112 +142,97 @@ def check_site(username, sitename, info):
                 # Non-fatal; proceed to content checks
                 pass
 
-            # Determine whether the profile exists based on status codes and/or
-            # presence of site-specific error messages. Some sites return a
-            # 200 status even for missing users (custom error pages), so we
-            # always check `errorMsg` when provided to avoid false positives.
-            error_type = info.get("errorType", "status_code")
-            error_msg = info.get("errorMsg", "")
+            # --- Validation Phase ---
+            # Fast and accurate response evaluation to reduce false positives
+            resp_code = response.status_code
+            resp_text = response.text or ""
+            resp_len = len(resp_text)
 
-            # Normalize error message check into a boolean that indicates the
-            # response contains a NOT-FOUND indication from the site.
-            # Optimization: if the response is very large, only scan the first
-            # and last slices (where not-found markers usually appear). Use
-            # lowercase matching to avoid repeated case conversions.
-            contains_error = False
-            try:
-                resp_text = response.text or ""
-                # Choose a snippet for large responses to avoid scanning huge HTML
-                if len(resp_text) > 20000:
-                    snippet = (resp_text[:10000] + resp_text[-10000:]).lower()
-                else:
-                    snippet = resp_text.lower()
+            # Fast short-circuit: ignore redirects or empty pages
+            if resp_code in (301, 302, 303, 307, 308) or resp_len < 100:
+                continue
 
-                if isinstance(error_msg, list):
-                    for msg in error_msg:
-                        if not msg:
-                            continue
-                        if msg.lower() in snippet:
-                            contains_error = True
-                            break
-                elif error_msg:
-                    contains_error = (error_msg.lower() in snippet)
-            except Exception:
-                contains_error = False
+            # Quick redirect detection (expanded list)
+            final_url = response.url.lower()
+            path = urlparse(final_url).path
+            GENERIC_PATHS = ["login", "signin", "signup", "register", "home", "dashboard", "index"]
+            if any(p in path for p in GENERIC_PATHS):
+                continue
+            if any(p in final_url for p in info.get("invalidRedirects", [])):
+                continue
+
+            # --- Smart content analysis ---
+            # Convert a small, relevant slice to lowercase once
+            snippet = (resp_text[:8000] + resp_text[-8000:]).lower() if resp_len > 16000 else resp_text.lower()
+
+            error_msgs = info.get("errorMsg", [])
+            if isinstance(error_msgs, str):
+                error_msgs = [error_msgs]
+
+            contains_error = any(msg.lower() in snippet for msg in error_msgs if msg)
+            if not contains_error:
+                # common not-found phrases (generic fallback)
+                COMMON_404 = ["user not found", "page not found", "no such user", "doesn't exist", "not exist", "404"]
+                contains_error = any(msg in snippet for msg in COMMON_404)
+
+            # --- Fast structural checks (length + hash) ---
+            # Cache baseline probe to detect generic pages
+            cache_key = f"{sitename}:{info['url']}"
+            PROBE_CACHE = globals().setdefault("_USER_CLEAN_PROBE_CACHE", {})
+            baseline = PROBE_CACHE.get(cache_key)
+
+            if info.get("probe", False) and baseline is None:
+                try:
+                    probe_name = f"__probe_{uuid4().hex}__"
+                    probe_url = info["url"].format(probe_name)
+                    probe_resp = requests.get(probe_url, headers=HEADERS, timeout=6)
+                    probe_text = probe_resp.text or ""
+                    probe_snip = (probe_text[:8000] + probe_text[-8000:]).lower()
+                    PROBE_CACHE[cache_key] = probe_snip
+                    baseline = probe_snip
+                except Exception:
+                    pass
 
             found = False
 
-            if error_type == "status_code":
-                # If server explicitly returns 404, treat as not found.
-                if response.status_code == 404:
-                    found = False
-                # If 200, consider it found only when the page does NOT contain
-                # a known not-found message.
-                elif response.status_code == 200:
-                    found = not contains_error
-                else:
-                    # For other status codes, rely on content if available;
-                    # if there's no not-found message and the status is < 400,
-                    # treat as found; otherwise treat as not found.
-                    if contains_error:
+            # --- Decision tree ---
+            if resp_code == 404 or contains_error:
+                found = False
+            elif resp_code == 200:
+                found = True
+                if baseline:
+                    # Quick compare via length + ratio + token overlap
+                    base_len = len(baseline)
+                    len_diff = abs(resp_len - base_len)
+                    if len_diff < 200:
                         found = False
                     else:
-                        found = (response.status_code < 400)
+                        # Fast difflib ratio check (optimized for short snippet)
+                        ratio = difflib.SequenceMatcher(None, baseline, snippet).quick_ratio()
+                        if ratio > 0.90:
+                            found = False
+                        else:
+                            # Token overlap as final guard
+                            base_words = set(re.findall(r'\w+', baseline))
+                            cur_words = set(re.findall(r'\w+', snippet))
+                            overlap = len(base_words & cur_words) / max(1, len(cur_words))
+                            if overlap > 0.8:
+                                found = False
+            else:
+                found = (resp_code < 400 and not contains_error)
 
-            elif error_type == "message":
-                # If the site uses message-based detection, it's found when
-                # the response does NOT contain an error message.
-                found = not contains_error
+            # Skip heavy diffs early for speed
+            if not found:
+                continue
 
-            if found:
-                # Optional probe-based baseline comparison: if enabled for the
-                # site, compare the response snippet to a cached random-probe
-                # snippet. If they're nearly identical, it's likely a generic
-                # not-found page.
-                try:
-                    if info.get("probe", False):
-                        cache_key = sitename
-                        baseline = PROBE_CACHE.get(cache_key)
-                        if baseline is None:
-                            # perform a lightweight probe and cache its snippet
-                            probe_name = f"__probe_{uuid4().hex}__"
-                            probe_url = info["url"].format(probe_name)
-                            try:
-                                probe_resp = requests.get(probe_url, headers=HEADERS, timeout=10, allow_redirects=True)
-                                probe_text = (probe_resp.text or "")
-                                if len(probe_text) > 20000:
-                                    baseline_snip = (probe_text[:10000] + probe_text[-10000:]).lower()
-                                else:
-                                    baseline_snip = probe_text.lower()
-                                PROBE_CACHE[cache_key] = baseline_snip
-                                baseline = baseline_snip
-                            except Exception:
-                                baseline = None
-
-                        if baseline:
-                            # Compare snippets; if very similar, treat as not found
-                            cur_text = resp_text if 'resp_text' in locals() else (response.text or "")
-                            if len(cur_text) > 20000:
-                                cur_snip = (cur_text[:10000] + cur_text[-10000:]).lower()
-                            else:
-                                cur_snip = cur_text.lower()
-                            try:
-                                ratio = difflib.SequenceMatcher(None, baseline, cur_snip).ratio()
-                                if ratio > 0.95:
-                                    if info.get("debug", False):
-                                        print(f"Probe match ({ratio:.2f}) for {sitename}; treating as not found")
-                                    continue
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-                return {
-                    "site": sitename, 
-                    "url": url, 
-                    "found": True,
-                    "urlMain": info.get("urlMain", ""),
-                    "isNSFW": info.get("isNSFW", False)
-                }
+            # Return found site
+            return {
+                "site": sitename,
+                "url": url,
+                "found": True,
+                "urlMain": info.get("urlMain", ""),
+                "isNSFW": info.get("isNSFW", False)
+            }
 
         except requests.exceptions.Timeout:
             continue  # Try next mutation or skip
