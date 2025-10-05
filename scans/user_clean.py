@@ -22,13 +22,15 @@ except json.JSONDecodeError:
     print("Warning: users.json contains invalid JSON")
     DATA = {}
 
-HEADERS = {
+# Create a session with connection pooling
+SESSION = requests.Session()
+SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
-}
+})
 
 # Username mutations for common variations
 MUTATIONS = {
@@ -60,172 +62,87 @@ def check_username_regex(username, regex_pattern):
         return True  # If regex is invalid, allow the check
 
 def check_site(username, sitename, info):
-    """Check a single site with proper error detection."""
-    # Check regex first
+    """Optimized site checker with faster validation."""
+    # Fast regex check first
     regex_pattern = info.get("regexCheck")
     if not check_username_regex(username, regex_pattern):
         return {"site": sitename, "url": info["url"].format(username), "found": False, "reason": "regex_fail"}
 
-    # Build list of (url, probe_username) so POST payloads can use the
-    # correct username variant when substituting. This prevents mismatch
-    # between URL and payload which can lead to false positives.
+    # Build URLs to try
     urls_to_try = [(info["url"].format(username), username)]
-
-    # Add mutated usernames if no regex restriction
-    if not regex_pattern:
-        for variant in mutate_username(username):
+    
+    # Only add mutations if no regex restriction (mutations rarely help and slow things down)
+    if not regex_pattern and len(username) < 15:  # Only for reasonable length usernames
+        for variant in mutate_username(username)[:3]:  # Limit to 3 mutations max
             urls_to_try.append((info["url"].format(variant), variant))
-
-    # Optional probe cache for baseline (helps detect sites that return a
-    # generic page for missing users). Controlled per-site via
-    # `info["probe"] = True` to avoid extra requests unless configured.
-    PROBE_CACHE = globals().get("_USER_CLEAN_PROBE_CACHE")
-    if PROBE_CACHE is None:
-        PROBE_CACHE = {}
-        globals()["_USER_CLEAN_PROBE_CACHE"] = PROBE_CACHE
 
     for url, probe_username in urls_to_try:
         try:
-            # Handle special request types
+            # --- FAST REQUEST PHASE ---
+            timeout = (4, 6)  # (connect_timeout, read_timeout) - much faster
+            
             if info.get("request_method") == "POST":
                 if "request_payload" in info:
                     payload = info["request_payload"]
-                    # Replace username placeholder in payload. Support
-                    # a clearer placeholder `{username}`; fall back to
-                    # `{}` if necessary. Use the probe_username (the
-                    # variant we're testing), not the original username.
                     payload_str = json.dumps(payload)
                     if "{username}" in payload_str:
                         payload_str = payload_str.replace("{username}", probe_username)
                     else:
                         payload_str = payload_str.replace("{}", probe_username)
                     payload = json.loads(payload_str)
-                    response = requests.post(
+                    response = SESSION.post(
                         info.get("urlProbe", url),
                         json=payload,
-                        headers=HEADERS,
-                        timeout=10,
+                        timeout=timeout,
                         allow_redirects=True
                     )
                 else:
                     continue
             else:
-                # Normal GET request
-                response = requests.get(
-                    url, 
-                    headers=HEADERS, 
-                    timeout=10, 
-                    allow_redirects=True
-                )
+                # Normal GET request with session (connection reuse)
+                response = SESSION.get(url, timeout=timeout, allow_redirects=True)
 
-            # Redirect heuristic: if the request ended up at the site root
-            # or a login/dashboard path, it's likely a generic page and not
-            # a profile. Sites can override via `invalidRedirects`.
-            try:
-                orig = urlparse(url)
-                final = urlparse(response.url)
-                invalid_redirects = info.get("invalidRedirects", [])
-                redirected_to_generic = False
-                if response.url != url and orig.netloc == final.netloc:
-                    path = (final.path or "/").lower()
-                    if path in ["/", ""] or any(p in path for p in ["login", "signin", "signup", "dashboard"]):
-                        redirected_to_generic = True
-                    if any(pat in response.url for pat in invalid_redirects):
-                        redirected_to_generic = True
-
-                if redirected_to_generic:
-                    # Treat as not found for this probe/variant and continue
-                    if info.get("debug", False):
-                        print(f"Redirected to generic page for {sitename}: {response.url}")
-                    continue
-            except Exception:
-                # Non-fatal; proceed to content checks
-                pass
-
-            # --- Validation Phase ---
-            # Fast and accurate response evaluation to reduce false positives
+            # --- FAST VALIDATION PHASE ---
             resp_code = response.status_code
             resp_text = response.text or ""
             resp_len = len(resp_text)
 
-            # Fast short-circuit: ignore redirects or empty pages
-            if resp_code in (301, 302, 303, 307, 308) or resp_len < 100:
+            # Quick status code check - fastest filter
+            if resp_code == 404:
+                continue  # Definitely not found
+            
+            if resp_code != 200:
+                if resp_code >= 400:  # Client errors
+                    continue
+                # For redirects, do a quick URL check
+                final_url = response.url.lower()
+                if any(path in final_url for path in ["/login", "/signin", "/signup", "/register"]):
+                    continue
+
+            # Skip very small responses (likely error pages)
+            if resp_len < 200:
                 continue
 
-            # Quick redirect detection (expanded list)
-            final_url = response.url.lower()
-            path = urlparse(final_url).path
-            GENERIC_PATHS = ["login", "signin", "signup", "register", "home", "dashboard", "index"]
-            if any(p in path for p in GENERIC_PATHS):
-                continue
-            if any(p in final_url for p in info.get("invalidRedirects", [])):
-                continue
+            # --- SMART CONTENT CHECK (OPTIMIZED) ---
+            # Only check a small portion of the page for speed
+            sample_size = min(5000, resp_len)
+            snippet = resp_text[:sample_size].lower()
 
-            # --- Smart content analysis ---
-            # Convert a small, relevant slice to lowercase once
-            snippet = (resp_text[:8000] + resp_text[-8000:]).lower() if resp_len > 16000 else resp_text.lower()
-
+            # Fast error message detection
             error_msgs = info.get("errorMsg", [])
             if isinstance(error_msgs, str):
                 error_msgs = [error_msgs]
-
-            contains_error = any(msg.lower() in snippet for msg in error_msgs if msg)
-            if not contains_error:
-                # common not-found phrases (generic fallback)
-                COMMON_404 = ["user not found", "page not found", "no such user", "doesn't exist", "not exist", "404"]
-                contains_error = any(msg in snippet for msg in COMMON_404)
-
-            # --- Fast structural checks (length + hash) ---
-            # Cache baseline probe to detect generic pages
-            cache_key = f"{sitename}:{info['url']}"
-            PROBE_CACHE = globals().setdefault("_USER_CLEAN_PROBE_CACHE", {})
-            baseline = PROBE_CACHE.get(cache_key)
-
-            if info.get("probe", False) and baseline is None:
-                try:
-                    probe_name = f"__probe_{uuid4().hex}__"
-                    probe_url = info["url"].format(probe_name)
-                    probe_resp = requests.get(probe_url, headers=HEADERS, timeout=6)
-                    probe_text = probe_resp.text or ""
-                    probe_snip = (probe_text[:8000] + probe_text[-8000:]).lower()
-                    PROBE_CACHE[cache_key] = probe_snip
-                    baseline = probe_snip
-                except Exception:
-                    pass
-
-            found = False
-
-            # --- Decision tree ---
-            if resp_code == 404 or contains_error:
-                found = False
-            elif resp_code == 200:
-                found = True
-                if baseline:
-                    # Quick compare via length + ratio + token overlap
-                    base_len = len(baseline)
-                    len_diff = abs(resp_len - base_len)
-                    if len_diff < 200:
-                        found = False
-                    else:
-                        # Fast difflib ratio check (optimized for short snippet)
-                        ratio = difflib.SequenceMatcher(None, baseline, snippet).quick_ratio()
-                        if ratio > 0.90:
-                            found = False
-                        else:
-                            # Token overlap as final guard
-                            base_words = set(re.findall(r'\w+', baseline))
-                            cur_words = set(re.findall(r'\w+', snippet))
-                            overlap = len(base_words & cur_words) / max(1, len(cur_words))
-                            if overlap > 0.8:
-                                found = False
-            else:
-                found = (resp_code < 400 and not contains_error)
-
-            # Skip heavy diffs early for speed
-            if not found:
+            
+            # Quick string search instead of complex logic
+            if any(msg.lower() in snippet for msg in error_msgs if msg):
                 continue
 
-            # Return found site
+            # Common 404 patterns
+            COMMON_404 = ["user not found", "page not found", "no such user", "doesn't exist", "not exist", "404"]
+            if any(msg in snippet for msg in COMMON_404):
+                continue
+
+            # If we passed all checks, consider it found
             return {
                 "site": sitename,
                 "url": url,
@@ -234,11 +151,8 @@ def check_site(username, sitename, info):
                 "isNSFW": info.get("isNSFW", False)
             }
 
-        except requests.exceptions.Timeout:
-            continue  # Try next mutation or skip
-        except requests.exceptions.RequestException:
-            continue  # Try next mutation or skip
-        except Exception as e:
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, 
+                requests.exceptions.RequestException, Exception):
             continue  # Try next mutation or skip
 
     return {
@@ -250,7 +164,7 @@ def check_site(username, sitename, info):
     }
 
 def run(username):
-    """Run all site checks in parallel."""
+    """Run all site checks in parallel with optimized settings."""
     if not DATA:
         return {
             "target": username, 
@@ -261,7 +175,8 @@ def run(username):
     
     results = []
     try:
-        with ThreadPoolExecutor(max_workers=15) as executor:  # Conservative thread count
+        # INCREASED THREAD COUNT + connection pooling = much faster
+        with ThreadPoolExecutor(max_workers=40) as executor:  # Increased from 15 to 40
             futures = []
             for sitename, info in DATA.items():
                 if "url" not in info:
@@ -277,15 +192,15 @@ def run(username):
                     results.append(result)
                     completed += 1
                     
-                    # Optional: Print progress
-                    if completed % 10 == 0:
+                    # Progress every 20 sites
+                    if completed % 20 == 0:
                         print(f"Progress: {completed}/{total} sites checked")
                         
                 except Exception as e:
                     print(f"Error processing site: {e}")
                     continue
 
-        # Sort results: found sites first, then alphabetically
+        # Sort results
         found_sites = [r for r in results if r["found"]]
         not_found_sites = [r for r in results if not r["found"]]
         
@@ -317,10 +232,10 @@ def run(username):
             "error": f"Scan failed: {str(e)}"
         }
 
-# Test function for debugging
+# Test function
 if __name__ == "__main__":
     test_username = "testuser"
-    print(f"Testing scanner with username: {test_username}")
+    print(f"Testing optimized scanner with username: {test_username}")
     results = run(test_username)
     print(f"Status: {results['status']}")
     print(f"Found {len([r for r in results['sites'] if r['found']])} sites")
