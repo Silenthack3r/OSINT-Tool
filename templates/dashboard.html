@@ -92,7 +92,7 @@
 
         <!-- Scan Form -->
         <form action="/scan" method="post" class="scan-form" id="scanForm">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="text" name="target" placeholder="Enter Target" class="target-input" required 
                    value="{{ target if target else '' }}" id="targetInput">
             
@@ -477,7 +477,7 @@
                 {% endif %}
             </div>
             <form id="ai-form" class="ai-form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="text" id="ai-input" placeholder="Ask AI a question..." 
                        {% if not results and not recent_scan %}disabled{% endif %} required>
                 <button type="submit" {% if not results and not recent_scan %}disabled{% endif %}>Send</button>
