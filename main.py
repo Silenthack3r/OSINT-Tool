@@ -3,7 +3,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import sqlite3, os
 from werkzeug.security import generate_password_hash, check_password_hash
 import time
-from scans.test import search_onion_links
+try:
+    from scans.test import search_onion_links
+except Exception:
+    # Optional module — continue without it and warn
+    search_onion_links = None
+    print("Warning: scans.test.search_onion_links not available; related features will be disabled.")
 import importlib
 import subprocess
 import json
@@ -15,7 +20,35 @@ import re
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24))
+
+# Secret key handling: prefer environment variable, else persist a key in a
+# file so restarts don't invalidate sessions during development. In
+# production, set SECRET_KEY env var.
+secret = os.environ.get("SECRET_KEY")
+secret_file = os.path.join(os.path.dirname(__file__), ".secret_key")
+if secret:
+    app.secret_key = secret
+else:
+    if os.path.exists(secret_file):
+        try:
+            with open(secret_file, "rb") as sf:
+                app.secret_key = sf.read()
+        except Exception:
+            # Fallback to generated key
+            app.secret_key = os.urandom(24)
+            print("Warning: failed to read .secret_key file, using generated key")
+    else:
+        # Generate and persist a secret key for local/dev use to avoid
+        # invalidating sessions on restart. Production should set SECRET_KEY.
+        key = os.urandom(24)
+        try:
+            with open(secret_file, "wb") as sf:
+                sf.write(key)
+            app.secret_key = key
+            print(f"Warning: SECRET_KEY not set. Generated and saved a key to {secret_file}. Set SECRET_KEY in production.")
+        except Exception:
+            app.secret_key = key
+            print("Warning: SECRET_KEY not set and failed to persist a generated key; sessions will be ephemeral.")
 
 # Security headers
 @app.after_request
@@ -39,13 +72,21 @@ def rate_limit(max_requests=10, window_seconds=60):
             if "user" in session:
                 user_id = session["user"]
             else:
-                user_id = request.remote_addr
+                # Prefer X-Forwarded-For when behind a proxy, otherwise remote_addr
+                user_id = request.headers.get('X-Forwarded-For', request.remote_addr)
+                if user_id and ',' in user_id:
+                    # Take the left-most (original client)
+                    user_id = user_id.split(',')[0].strip()
                 
             now = time.time()
             window_start = now - window_seconds
             
-            # Clean old entries
-            request_counts[user_id] = [req_time for req_time in request_counts.get(user_id, []) if req_time > window_start]
+            # Clean old entries and prune empty lists to avoid unbounded growth
+            cleaned = [req_time for req_time in request_counts.get(user_id, []) if req_time > window_start]
+            if cleaned:
+                request_counts[user_id] = cleaned
+            else:
+                request_counts.pop(user_id, None)
             
             # Check rate limit
             if len(request_counts[user_id]) >= max_requests:
@@ -77,7 +118,8 @@ def validate_input(input_str, input_type):
     elif input_type == "phone":
         return bool(re.match(r'^\+?[1-9]\d{1,14}$', input_str))
     elif input_type == "url":
-        return bool(re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', input_str))
+        # Accept http(s) URLs and plain domains
+        return bool(re.match(r'^(https?://)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(/.*)?$', input_str))
     elif input_type == "fullname":
         return bool(re.match(r'^[a-zA-Z\s]{2,100}$', input_str))
     
@@ -316,8 +358,48 @@ def ask_ai():
     if not scan_results:
         return jsonify({"error": "Scan results not found"}), 400
 
-    # Your existing AI logic here
-    # ...
+    # Lightweight local 'AI' responder (no external network required).
+    # This is a deterministic summarizer that answers common questions
+    # about the most recent scan results. If you want a full LLM
+    # integration later, we can add an OpenAI/other provider path that
+    # uses an API key stored in an environment variable.
+
+    def _summarize_scan(scan):
+        if not scan:
+            return "No scan results available."
+        summary = scan.get('summary', {})
+        parts = []
+        parts.append(f"Target: {scan.get('target', 'unknown')}")
+        parts.append(f"Status: {scan.get('status', 'unknown')}")
+        if summary:
+            parts.append(f"Found on {summary.get('found_sites', 0)} out of {summary.get('total_sites', 0)} sites")
+            parts.append(f"Scan time: {summary.get('scan_time_seconds', 'N/A')}s")
+        return " | ".join(parts)
+
+    def _list_found_sites(scan, limit=20):
+        if not scan:
+            return "No scan results available."
+        sites = [s for s in scan.get('sites', []) if s.get('found')]
+        if not sites:
+            return "No sites were found for this target."
+        lines = [f"{s.get('site')}: {s.get('url')}" for s in sites[:limit]]
+        return "\n".join(lines)
+
+    q = question.lower()
+    answer = "I'm not sure how to answer that. Try asking for a 'summary' or 'where was it found'."
+
+    if 'summary' in q or 'overview' in q or 'status' in q:
+        answer = _summarize_scan(scan_results)
+    elif 'where' in q or 'found' in q or 'sites' in q or 'which' in q:
+        answer = _list_found_sites(scan_results, limit=50)
+    elif 'top' in q or 'most' in q:
+        # Show top-found sites by order
+        answer = _list_found_sites(scan_results, limit=10)
+    else:
+        # Default to a short summary followed by found sites
+        answer = _summarize_scan(scan_results) + "\n\nFound sites:\n" + _list_found_sites(scan_results, limit=10)
+
+    return jsonify({"answer": answer}), 200
 
 @app.route('/report')
 @login_required

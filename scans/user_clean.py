@@ -20,6 +20,32 @@ except json.JSONDecodeError:
     print("Warning: users.json contains invalid JSON")
     DATA = {}
 
+
+def _format_url(template, username):
+    """Safely format URL templates that may use positional '{}' or named '{username}' placeholders.
+    Tries several strategies and falls back to a simple replace if formatting fails.
+    """
+    if not template:
+        return template
+    try:
+        # If explicit named placeholder present, use it
+        if "{username}" in template:
+            return template.format(username=username)
+        # If positional placeholder used
+        if "{}" in template:
+            return template.format(username)
+        # Try keyword formatting first (most explicit)
+        try:
+            return template.format(username=username)
+        except Exception:
+            return template.format(username)
+    except Exception:
+        # Last resort: replace common placeholder patterns
+        try:
+            return template.replace("{username}", username).replace("{}", username)
+        except Exception:
+            return template
+
 async def check_site_async(session, username, sitename, info):
     """Fast but reliable site checker"""
     # Fast regex check first
@@ -27,11 +53,11 @@ async def check_site_async(session, username, sitename, info):
     if regex_pattern:
         try:
             if not re.match(regex_pattern, username):
-                return {"site": sitename, "url": info["url"].format(username), "found": False, "reason": "regex_fail"}
+                return {"site": sitename, "url": _format_url(info.get("url", ""), username), "found": False, "reason": "regex_fail"}
         except:
             pass
 
-    url = info["url"].format(username=username)
+    url = _format_url(info.get("url", ""), username)
     
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=4)) as response:
