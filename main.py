@@ -478,8 +478,17 @@ def scan():
         session['last_scan_id'] = scan_id
         cleanup_old_scans()
 
+        # ADD THIS RETURN STATEMENT
+        return render_template(
+            "dashboard.html",
+            username=session["user"],
+            target=target,
+            results=results,
+            scan_id=scan_id
+        )
+
     except Exception as e:
-    # Don't expose internal errors to user
+        # Don't expose internal errors to user
         app.logger.error(f"Scan error: {str(e)}")
         flash("Scan failed due to an internal error", "danger")
         # Safely render dashboard with empty/default values
@@ -491,7 +500,6 @@ def scan():
             scan_id=None,
             recent_scan=None
         )
-
 
 
 @app.route("/ask_ai", methods=["POST"])
