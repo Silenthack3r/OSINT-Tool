@@ -621,7 +621,7 @@
 
         // Enable form if scan results become available
         function checkScanResults() {
-            const hasResults = {{ (results or recent_scan)|tojson|safe }};
+            const hasResults = JSON.parse('{{ (results or recent_scan)|tojson|safe }}');
             const aiInput = document.getElementById("ai-input");
             const aiButton = document.querySelector("#ai-form button");
             
@@ -638,4 +638,5 @@
     </script>
 
 </body>
+<script src="{{ url_for('static', filename='csrf.js') }}"></script>
 </html>

@@ -21,24 +21,57 @@ import uuid
 from datetime import datetime, timedelta
 import re
 from functools import wraps
+try:
+    from flask_session import Session
+except Exception:
+    Session = None
 
 app = Flask(__name__)
+
+# Session cookie defaults: keep SameSite=Lax for reasonable CSRF protection and
+# allow JavaScript to read the cookie if needed (HttpOnly stays True).
+# In production you should set SESSION_COOKIE_SECURE=True when using HTTPS.
+app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
+app.config.setdefault('SESSION_COOKIE_SECURE', False)
+
+_DEBUG_CSRF = os.environ.get('DEBUG_CSRF', '0') in ('1', 'true', 'True')
+
+# Optionally enable server-side sessions if flask-session is available.
+if Session is not None:
+    try:
+        sess_dir = os.path.join(os.path.dirname(__file__), 'flask_session')
+        os.makedirs(sess_dir, exist_ok=True)
+        app.config['SESSION_TYPE'] = 'filesystem'
+        app.config['SESSION_FILE_DIR'] = sess_dir
+        app.config.setdefault('SESSION_PERMANENT', False)
+        server_session = Session(app)
+        app.logger.info('Flask-Session enabled (filesystem)')
+    except Exception as e:
+        app.logger.warning(f'Failed to enable Flask-Session: {e}; falling back to cookie sessions')
+else:
+    app.logger.info('Flask-Session not installed; using signed cookie sessions')
 
 # Secret key handling: prefer environment variable, else persist a key in a
 # file so restarts don't invalidate sessions during development. In
 # production, set SECRET_KEY env var.
 secret = os.environ.get("SECRET_KEY")
 secret_file = os.path.join(os.path.dirname(__file__), ".secret_key")
+secret_source = 'unknown'
 if secret:
     app.secret_key = secret
+    secret_source = 'env'
 else:
     if os.path.exists(secret_file):
         try:
-            with open(secret_file, "rb") as sf:
+            # read as text if possible
+            with open(secret_file, "r", encoding="utf-8") as sf:
                 app.secret_key = sf.read()
+            secret_source = 'file'
         except Exception:
             # Fallback to generated key
             app.secret_key = os.urandom(24)
+            secret_source = 'generated'
             print("Warning: failed to read .secret_key file, using generated key")
     else:
         # Generate and persist a secret key for local/dev use to avoid
@@ -48,9 +81,11 @@ else:
             with open(secret_file, "wb") as sf:
                 sf.write(key)
             app.secret_key = key
+            secret_source = 'generated_persisted'
             print(f"Warning: SECRET_KEY not set. Generated and saved a key to {secret_file}. Set SECRET_KEY in production.")
         except Exception:
             app.secret_key = key
+            secret_source = 'generated'
             print("Warning: SECRET_KEY not set and failed to persist a generated key; sessions will be ephemeral.")
 
 # ---- Structured logging ----
@@ -64,6 +99,17 @@ handler.setFormatter(formatter)
 app.logger.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 logging.getLogger('werkzeug').addHandler(handler)
+
+# Log where the secret came from (env/file/generated) without printing the secret itself
+try:
+    secret_len = len(app.secret_key) if app.secret_key else 0
+except Exception:
+    # secret might be bytes-like
+    try:
+        secret_len = len(app.secret_key.decode('utf-8'))
+    except Exception:
+        secret_len = 0
+app.logger.info(f"SECRET source={secret_source} secret_len={secret_len}")
 
 # Redis support removed; the app uses an in-memory rate limiter.
 redis_client = None
@@ -314,12 +360,30 @@ def _csrf_protect():
         # Accept token in header or form
         header_token = request.headers.get('X-CSRF-Token')
         form_token = request.form.get('csrf_token') if request.form else None
+        if _DEBUG_CSRF:
+            # For debugging only: log presence and length, not the full token
+            app.logger.info(f"CSRF debug: session_has_token={bool(token)}, session_len={len(token) if token else 0}, header_present={bool(header_token)}, header_len={len(header_token) if header_token else 0}, form_present={bool(form_token)}, form_len={len(form_token) if form_token else 0}")
         if header_token == token or form_token == token:
             return None
         abort(400, 'Invalid CSRF token')
 
 
     # no-op for other methods
+
+
+@app.route('/_diag')
+def _diag():
+    # Return minimal session diagnostics. Restrict to localhost or when debug enabled.
+    remote = request.remote_addr
+    if not _DEBUG_CSRF and remote not in ('127.0.0.1', '::1'):
+        abort(404)
+    s = session
+    return jsonify({
+        'remote': remote,
+        'session_has_csrf': bool(s.get('csrf_token')),
+        'session_csrf_len': len(s.get('csrf_token') or ''),
+        'session_user': bool(s.get('user'))
+    })
 
 @app.route("/register", methods=["GET", "POST"])
 @rate_limit(max_requests=3, window_seconds=300)

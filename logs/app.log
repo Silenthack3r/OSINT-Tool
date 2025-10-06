@@ -64,3 +64,69 @@ Traceback (most recent call last):
 AssertionError: The setup method 'context_processor' can no longer be called on the application. It has already handled its first request, any changes will not be applied consistently.
 Make sure all imports, decorators, functions, etc. needed to set up the application are done before running it.
 2025-10-06 20:14:30,753 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:14:30] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-10-06 20:22:42,280 ERROR main: Exception on / [GET]
+Traceback (most recent call last):
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 915, in full_dispatch_request
+    rv = self.preprocess_request()
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 1291, in preprocess_request
+    rv = self.ensure_sync(before_func)()
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/main.py", line 312, in _csrf_protect
+    abort(400, 'Missing CSRF token in session')
+    ^^^^^^^^^^^^^^
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/sansio/scaffold.py", line 46, in wrapper_func
+    self._check_setup_finished(f_name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/sansio/app.py", line 415, in _check_setup_finished
+    raise AssertionError(
+    ...<7 lines>...
+    )
+AssertionError: The setup method 'context_processor' can no longer be called on the application. It has already handled its first request, any changes will not be applied consistently.
+Make sure all imports, decorators, functions, etc. needed to set up the application are done before running it.
+2025-10-06 20:22:42,285 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:22:42] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-10-06 20:22:43,432 ERROR main: Exception on / [GET]
+Traceback (most recent call last):
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 915, in full_dispatch_request
+    rv = self.preprocess_request()
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/app.py", line 1291, in preprocess_request
+    rv = self.ensure_sync(before_func)()
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/main.py", line 312, in _csrf_protect
+    abort(400, 'Missing CSRF token in session')
+    ^^^^^^^^^^^^^^
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/sansio/scaffold.py", line 46, in wrapper_func
+    self._check_setup_finished(f_name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/home/m1nt/Downloads/Telegram Desktop/Recon/lib/python3.13/site-packages/flask/sansio/app.py", line 415, in _check_setup_finished
+    raise AssertionError(
+    ...<7 lines>...
+    )
+AssertionError: The setup method 'context_processor' can no longer be called on the application. It has already handled its first request, any changes will not be applied consistently.
+Make sure all imports, decorators, functions, etc. needed to set up the application are done before running it.
+2025-10-06 20:22:43,439 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:22:43] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-10-06 20:22:58,024 INFO werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.10:5000
+2025-10-06 20:22:58,024 INFO werkzeug: [33mPress CTRL+C to quit[0m
+2025-10-06 20:23:02,560 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:02] "[32mGET / HTTP/1.1[0m" 302 -
+2025-10-06 20:23:02,613 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:02] "GET /login HTTP/1.1" 200 -
+2025-10-06 20:23:02,745 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:02] "GET /static/images/logo.png HTTP/1.1" 200 -
+2025-10-06 20:23:02,759 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:02] "GET /static/style.css HTTP/1.1" 200 -
+2025-10-06 20:23:02,801 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:02] "GET /static/images/background.jpg.jpg HTTP/1.1" 200 -
+2025-10-06 20:23:05,044 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:05] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-10-06 20:23:05,089 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:05] "GET /dashboard HTTP/1.1" 200 -
+2025-10-06 20:23:05,141 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:05] "[36mGET /static/dashboard.css HTTP/1.1[0m" 304 -
+2025-10-06 20:23:10,063 INFO werkzeug: 127.0.0.1 - - [06/Oct/2025 20:23:10] "[31m[1mPOST /scan HTTP/1.1[0m" 400 -
+2025-10-06 20:32:12,423 INFO main: SECRET source=generated secret_len=24
+2025-10-06 20:35:18,015 INFO main: SECRET source=generated secret_len=24
+2025-10-06 20:36:59,643 INFO main: SECRET source=generated secret_len=24
+2025-10-06 20:37:08,208 INFO main: SECRET source=generated secret_len=24
+2025-10-06 20:37:40,090 INFO main: SECRET source=generated secret_len=24
+2025-10-06 20:37:52,895 INFO main: SECRET source=generated secret_len=24
