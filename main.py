@@ -298,6 +298,10 @@ def login():
 @app.before_request
 def _csrf_protect():
     # Only enforce CSRF for state-changing methods
+    # Ensure the session always has a csrf_token for templates and JS
+    if 'csrf_token' not in session:
+        session['csrf_token'] = uuid.uuid4().hex
+
     if request.method in ('POST', 'PUT', 'DELETE'):
         # Allow login and register to proceed (they generate tokens)
         if request.endpoint in ('login', 'register'):
@@ -315,10 +319,7 @@ def _csrf_protect():
         abort(400, 'Invalid CSRF token')
 
 
-    # Expose csrf_token to templates so forms and JS can access it
-    @app.context_processor
-    def inject_csrf_token():
-        return {"csrf_token": session.get('csrf_token', '')}
+    # no-op for other methods
 
 @app.route("/register", methods=["GET", "POST"])
 @rate_limit(max_requests=3, window_seconds=300)
