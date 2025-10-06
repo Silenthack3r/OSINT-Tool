@@ -21,6 +21,8 @@ import uuid
 from datetime import datetime, timedelta
 import re
 from functools import wraps
+import threading
+background_scans = {}
 try:
     from flask_session import Session
 except Exception:
@@ -137,7 +139,7 @@ SCAN_RESULTS_DB = "scan_results.db"
 # Rate limiting storage
 request_counts = {}
 
-def rate_limit(max_requests=5000, window_seconds=180):
+def rate_limit(max_requests=1000, window_seconds=180):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -434,9 +436,11 @@ def logout():
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
 
+import threading
+
 @app.route('/scan', methods=['POST'])
 @login_required
-@rate_limit(max_requests=5, window_seconds=120)
+@rate_limit(max_requests=100, window_seconds=60)
 def scan():
     target = request.form.get('target', '').strip()
     target_type = request.form.get('target_type', '')
@@ -453,53 +457,42 @@ def scan():
 
     country_code = request.form.get('country_code', '+1')
 
-    results = {}
-    
-    try:
-        # Your existing scan logic here (truncated for brevity)
-        if target_type == "username" and scan_type == "clean":
-            raw_results = user_clean.run(target)
-            sites = []
-            for r in raw_results["sites"]:
-                sites.append({
-                    "site": r["site"],
-                    "url": r["url"],
-                    "found": r.get("found", False)
-                })
-            results = {
-                "target": target,
-                "status": "completed",
-                "sites": sites
-            }
-        # ... rest of your scan logic
-        
-        # Store results
-        scan_id = store_scan_results(session["user"], target, target_type, scan_type, results)
-        session['last_scan_id'] = scan_id
-        cleanup_old_scans()
+    # Background scan function
+    def run_scan():
+        results = {}
+        try:
+            if target_type == "username" and scan_type == "clean":
+                raw_results = user_clean.run(target)
+                sites = []
+                for r in raw_results["sites"]:
+                    sites.append({
+                        "site": r["site"],
+                        "url": r["url"],
+                        "found": r.get("found", False)
+                    })
+                results = {
+                    "target": target,
+                    "status": "completed",
+                    "sites": sites
+                }
+            # ... add other scan logic here as needed
 
-        # ADD THIS RETURN STATEMENT
-        return render_template(
-            "dashboard.html",
-            username=session["user"],
-            target=target,
-            results=results,
-            scan_id=scan_id
-        )
+            # Store results in DB
+            scan_id = store_scan_results(session["user"], target, target_type, scan_type, results)
+            session['last_scan_id'] = scan_id
+            cleanup_old_scans()
+        except Exception as e:
+            app.logger.error(f"Background scan error: {str(e)}")
+            # Could store an error record if desired
+            store_scan_results(session["user"], target, target_type, scan_type, {"error": "Scan failed"})
 
-    except Exception as e:
-        # Don't expose internal errors to user
-        app.logger.error(f"Scan error: {str(e)}")
-        flash("Scan failed due to an internal error", "danger")
-        # Safely render dashboard with empty/default values
-        return render_template(
-            "dashboard.html",
-            username=session.get("user", "unknown"),
-            target=target or "",
-            results=results or {},
-            scan_id=None,
-            recent_scan=None
-        )
+    # Start background thread
+    threading.Thread(target=run_scan, daemon=True).start()
+
+    # Immediate response to user
+    flash("Scan started in the background. Results will appear shortly.", "info")
+    return redirect(url_for("dashboard"))
+
 
 
 @app.route("/ask_ai", methods=["POST"])
@@ -586,5 +579,6 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port)
+
 
 
