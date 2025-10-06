@@ -137,7 +137,7 @@ SCAN_RESULTS_DB = "scan_results.db"
 # Rate limiting storage
 request_counts = {}
 
-def rate_limit(max_requests=10, window_seconds=60):
+def rate_limit(max_requests=400, window_seconds=120):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -584,4 +584,5 @@ def report():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+
     app.run(host="0.0.0.0", port=port)
