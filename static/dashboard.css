@@ -539,3 +539,79 @@ body {
         max-width: 90%;
     }
 }
+
+.pii-footer-note {
+    text-align: center;
+    padding: 25px 40px;
+    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+    border-radius: 16px;
+    border: 2px solid #e2e8f0;
+    font-weight: 700;
+    color: #475569;
+    margin-top: 20px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 1.1rem;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.05);
+}
+
+.pii-footer-note p {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+/* Responsive Design for PII Section */
+@media (max-width: 1200px) {
+    .pii-cards-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 25px;
+    }
+}
+
+@media (max-width: 768px) {
+    .pii-cards-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .pii-comparison {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .pii-title {
+        font-size: 2rem;
+    }
+    
+    .pii-card {
+        padding: 25px 20px;
+        min-height: auto;
+    }
+    
+    .pii-awareness-section {
+        padding: 0 20px;
+        margin: 40px auto 30px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pii-title {
+        font-size: 1.8rem;
+    }
+    
+    .pii-subtitle {
+        font-size: 1.1rem;
+    }
+    
+    .pii-footer-note p {
+        font-size: 1rem;
+    }
+}
+.icon-image {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    filter: brightness(0.8);
+}
+
+.pii-card:hover .icon-image {
+    filter: brightness(1) invert(1);
