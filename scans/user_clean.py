@@ -21,7 +21,7 @@ except json.JSONDecodeError:
     DATA = {}
 
 async def check_site_async(session, username, sitename, info):
-    """ULTRA FAST async site checker"""
+    """Fast but reliable site checker"""
     # Fast regex check first
     regex_pattern = info.get("regexCheck")
     if regex_pattern:
@@ -34,19 +34,27 @@ async def check_site_async(session, username, sitename, info):
     url = info["url"].format(username=username)
     
     try:
-        # FIRE THE REQUEST - 3 second timeout max
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=3)) as response:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=4)) as response:
             resp_code = response.status
             resp_text = await response.text()
             
-            # ULTRA FAST validation
+            # Proper validation
             if resp_code == 200:
-                # Quick content check
-                text_snippet = (resp_text or "").lower()[:1000]
+                text_snippet = (resp_text or "").lower()[:1500]
                 
-                # Fast error detection
-                error_indicators = ["not found", "404", "doesn't exist", "no such user", "error"]
-                if not any(error in text_snippet for error in error_indicators):
+                # Check for error messages
+                error_msgs = info.get("errorMsg", [])
+                if isinstance(error_msgs, str):
+                    error_msgs = [error_msgs]
+                
+                contains_error = any(msg.lower() in text_snippet for msg in error_msgs if msg)
+                
+                # Common error patterns as fallback
+                if not contains_error:
+                    common_errors = ["not found", "404", "doesn't exist", "no such user", "error", "page not found"]
+                    contains_error = any(error in text_snippet for error in common_errors)
+                
+                if not contains_error:
                     return {
                         "site": sitename,
                         "url": url,
@@ -65,11 +73,11 @@ async def check_site_async(session, username, sitename, info):
             
     except asyncio.TimeoutError:
         return {"site": sitename, "url": url, "found": False, "reason": "timeout"}
-    except Exception:
-        return {"site": sitename, "url": url, "found": False, "reason": "error"}
+    except Exception as e:
+        return {"site": sitename, "url": url, "found": False, "reason": f"error: {str(e)}"}
 
 async def run_async_scan(username):
-    """MAIN ASYNC SCANNER - Fires all requests simultaneously"""
+    """Scan ALL domains with real-time progress"""
     if not DATA:
         return {
             "target": username, 
@@ -78,39 +86,43 @@ async def run_async_scan(username):
             "error": "users.json not loaded properly"
         }
     
-    print(f"🚀 Starting ULTRA FAST async scan for: {username}")
+    print(f"🎯 Starting comprehensive scan for: {username}")
     start_time = time.time()
-    results = []
     
-    # Create session with connection limits suitable for low memory
-    connector = aiohttp.TCPConnector(limit=100, limit_per_host=10)
+    # Get ALL sites from JSON
+    sites_to_check = []
+    for sitename, info in DATA.items():
+        if "url" in info:
+            sites_to_check.append((sitename, info))
+    
+    total_sites = len(sites_to_check)
+    print(f"📊 Scanning ALL {total_sites} platforms from JSON file...")
+    
+    # Balanced connection settings for speed and reliability
+    connector = aiohttp.TCPConnector(limit=50, limit_per_host=10)
     
     async with aiohttp.ClientSession(
         connector=connector,
         headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
         },
-        timeout=aiohttp.ClientTimeout(total=3)
+        timeout=aiohttp.ClientTimeout(total=4)
     ) as session:
         
-        # CREATE ALL TASKS AT ONCE
+        # Create tasks for ALL sites
         tasks = []
-        valid_sites = 0
-        
-        for sitename, info in DATA.items():
-            if "url" not in info:
-                continue
-                
+        for sitename, info in sites_to_check:
             task = check_site_async(session, username, sitename, info)
             tasks.append(task)
-            valid_sites += 1
         
-        print(f"🎯 Firing {valid_sites} simultaneous requests...")
+        print(f"🚀 Firing {len(tasks)} requests to check ALL platforms...")
         
-        # EXECUTE ALL REQUESTS CONCURRENTLY
-        completed = 0
+        # Process results as they come in with real-time progress
+        results = []
         found_count = 0
+        completed = 0
         
         for future in asyncio.as_completed(tasks):
             try:
@@ -120,21 +132,34 @@ async def run_async_scan(username):
                 
                 if result["found"]:
                     found_count += 1
+                    print(f"✅ FOUND: {result['site']}")
                 
-                # Progress update every 25 sites
-                if completed % 25 == 0:
+                # Show progress updates
+                if completed % 20 == 0:  # Update every 20 sites
                     elapsed = time.time() - start_time
-                    print(f"📊 Progress: {completed}/{valid_sites} sites | Found: {found_count} | Time: {elapsed:.1f}s")
+                    progress_percent = (completed / total_sites) * 100
+                    sites_per_sec = completed / elapsed if elapsed > 0 else 0
                     
-            except Exception:
+                    print(f"📈 Progress: {completed}/{total_sites} ({progress_percent:.1f}%) | "
+                          f"Found: {found_count} | Speed: {sites_per_sec:.1f} sites/sec | "
+                          f"Time: {elapsed:.1f}s")
+                    
+            except Exception as e:
                 completed += 1
+                print(f"❌ Error checking site: {e}")
                 continue
     
-    # Calculate performance
+    # Scan completed
     end_time = time.time()
     total_time = end_time - start_time
     
-    # Sort results
+    print(f"\n🎉 SCAN COMPLETED!")
+    print(f"⏰ Total time: {total_time:.1f} seconds")
+    print(f"📊 Sites scanned: {len(results)}")
+    print(f"✅ Found on: {found_count} platforms")
+    print(f"⚡ Average speed: {len(results)/total_time:.1f} sites/second")
+    
+    # Sort results: found sites first, then by site name
     found_sites = [r for r in results if r["found"]]
     not_found_sites = [r for r in results if not r["found"]]
     
@@ -153,8 +178,6 @@ async def run_async_scan(username):
         "sites_per_second": f"{(len(results)/total_time):.1f}" if total_time > 0 else "N/A"
     }
 
-    print(f"🎉 Scan completed in {total_time:.1f}s - Found {len(found_sites)} sites")
-    
     return {
         "target": username, 
         "status": "completed", 
@@ -164,12 +187,28 @@ async def run_async_scan(username):
 
 # Synchronous wrapper for Flask compatibility
 def run(username):
-    """Wrapper to run the async scanner - THIS IS WHAT YOUR FLASK APP CALLS"""
-    print(f"🔥 Starting ULTRA FAST scan for: {username}")
+    """Main function called by your Flask app - scans ALL domains and returns immediately when done"""
+    print(f"🔥 Starting username scan for: {username}")
     return asyncio.run(run_async_scan(username))
 
 # For testing
 if __name__ == "__main__":
     test_username = "testuser"
+    print("🚀 TESTING COMPREHENSIVE SCANNER")
+    print("=" * 60)
+    
     results = run(test_username)
-    print(f"Found {len([r for r in results['sites'] if r['found']])} sites")
+    
+    print(f"\n📋 FINAL RESULTS:")
+    print(f"Target: {results['target']}")
+    print(f"Status: {results['status']}")
+    print(f"Total sites checked: {results['summary']['total_sites']}")
+    print(f"Found on: {results['summary']['found_sites']} sites")
+    print(f"Scan time: {results['summary']['scan_time_seconds']} seconds")
+    
+    # Show first 10 found sites
+    found_sites = [r for r in results['sites'] if r['found']]
+    if found_sites:
+        print(f"\n📍 Found on these platforms:")
+        for site in found_sites[:15]:
+            print(f"   ✓ {site['site']}")
