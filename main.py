@@ -436,7 +436,6 @@ def logout():
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
 
-import threading
 
 
 @app.route('/scan', methods=['POST'])
@@ -446,7 +445,8 @@ def scan():
     target = request.form.get('target', '').strip()
     target_type = request.form.get('target_type', '')
     scan_type = request.form.get('scan_type', '')
-    
+
+    # Validate inputs
     if not target or not target_type or not scan_type:
         flash("Missing required fields", "danger")
         return redirect(url_for("dashboard"))
@@ -455,27 +455,55 @@ def scan():
         flash("Invalid input format", "danger")
         return redirect(url_for("dashboard"))
 
-    # Capture session data here
-    username = session["user"]
+    country_code = request.form.get('country_code', '+1')
 
-    def run_scan(username=username, target=target, target_type=target_type, scan_type=scan_type):
-        results = {}
-        try:
-            if target_type == "username" and scan_type == "clean":
-                raw_results = user_clean.run(target)
-                sites = [{"site": r["site"], "url": r["url"], "found": r.get("found", False)}
-                         for r in raw_results["sites"]]
-                results = {"target": target, "status": "completed", "sites": sites}
+    results = {}
 
-            scan_id = store_scan_results(username, target, target_type, scan_type, results)
-        except Exception as e:
-            app.logger.error(f"Background scan error: {str(e)}")
-            # Store error without using session
-            store_scan_results(username, target, target_type, scan_type, {"error": "Scan failed"})
+    try:
+        if target_type == "username" and scan_type == "clean":
+            raw_results = user_clean.run(target)
+            sites = []
+            for r in raw_results["sites"]:
+                sites.append({
+                    "site": r["site"],
+                    "url": r["url"],
+                    "found": r.get("found", False)
+                })
+                # Delay 1 second per site to avoid skipping
+                time.sleep(1)
 
-    threading.Thread(target=run_scan, daemon=True).start()
-    flash("Scan started in the background. Results will appear shortly.", "info")
-    return redirect(url_for("dashboard"))
+            results = {
+                "target": target,
+                "status": "completed",
+                "sites": sites
+            }
+
+        # ... add other scan types here as needed
+
+        # Store results
+        scan_id = store_scan_results(session["user"], target, target_type, scan_type, results)
+        session['last_scan_id'] = scan_id
+        cleanup_old_scans()
+
+        return render_template(
+            "dashboard.html",
+            username=session["user"],
+            target=target,
+            results=results,
+            scan_id=scan_id
+        )
+
+    except Exception as e:
+        app.logger.error(f"Scan error: {str(e)}")
+        flash("Scan failed due to an internal error", "danger")
+        return render_template(
+            "dashboard.html",
+            username=session.get("user", "unknown"),
+            target=target or "",
+            results=results or {},
+            scan_id=None,
+            recent_scan=None
+        )
 
 
 
@@ -563,6 +591,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port)
+
 
 
 
