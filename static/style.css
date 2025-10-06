@@ -114,3 +114,12 @@ body {
 .messages .info { color: blue; }
 .messages .warning { color: orange; }
 
+
+/* Auth background: uses a static path so templates don't need inline Jinja in CSS */
+.auth-bg {
+    background-image: url('/static/images/background.jpg.jpg');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+}
+

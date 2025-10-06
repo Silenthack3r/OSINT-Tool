@@ -1,5 +1,8 @@
 from scans import user_clean
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, abort
+import logging
+from logging.handlers import RotatingFileHandler
+# Redis removed: using in-memory rate limiter only to keep dependencies minimal.
 import sqlite3, os
 from werkzeug.security import generate_password_hash, check_password_hash
 import time
@@ -50,6 +53,22 @@ else:
             app.secret_key = key
             print("Warning: SECRET_KEY not set and failed to persist a generated key; sessions will be ephemeral.")
 
+# ---- Structured logging ----
+logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+log_path = os.path.join(logs_dir, 'app.log')
+handler = RotatingFileHandler(log_path, maxBytes=5*1024*1024, backupCount=3)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s')
+handler.setFormatter(formatter)
+app.logger.setLevel(logging.INFO)
+app.logger.addHandler(handler)
+logging.getLogger('werkzeug').addHandler(handler)
+
+# Redis support removed; the app uses an in-memory rate limiter.
+redis_client = None
+
+
 # Security headers
 @app.after_request
 def set_security_headers(response):
@@ -58,6 +77,13 @@ def set_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
+
+
+# Expose csrf_token to templates so forms and JS can access it.
+# Must be registered at import/setup time (not during a request).
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": session.get('csrf_token', '')}
 
 data = "main.db"
 SCAN_RESULTS_DB = "scan_results.db"
@@ -77,22 +103,16 @@ def rate_limit(max_requests=10, window_seconds=60):
                 if user_id and ',' in user_id:
                     # Take the left-most (original client)
                     user_id = user_id.split(',')[0].strip()
-                
-            now = time.time()
+            now = int(time.time())
+
+            # In-memory rate limiting
             window_start = now - window_seconds
-            
-            # Clean old entries and prune empty lists to avoid unbounded growth
-            cleaned = [req_time for req_time in request_counts.get(user_id, []) if req_time > window_start]
-            if cleaned:
-                request_counts[user_id] = cleaned
-            else:
-                request_counts.pop(user_id, None)
-            
-            # Check rate limit
-            if len(request_counts[user_id]) >= max_requests:
+            existing = request_counts.get(user_id, [])
+            cleaned = [req_time for req_time in existing if req_time > window_start]
+            if len(cleaned) >= max_requests:
                 return jsonify({"error": "Rate limit exceeded"}), 429
-                
-            request_counts[user_id].append(now)
+            cleaned.append(now)
+            request_counts[user_id] = cleaned
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -183,13 +203,52 @@ def store_scan_results(username, target, target_type, scan_type, results):
     scan_id = str(uuid.uuid4())
     conn = get_scan_db_connection()
     c = conn.cursor()
+    # Cap results size to avoid storing extremely large payloads (trim if necessary)
+    results_json = json.dumps(results)
+    MAX_RESULT_BYTES = 200000  # ~200KB
+    if len(results_json.encode('utf-8')) > MAX_RESULT_BYTES:
+        # Trim sites list to keep most relevant info
+        try:
+            trimmed = results.copy()
+            if isinstance(trimmed.get('sites'), list):
+                trimmed['sites'] = trimmed['sites'][:100]
+            results_json = json.dumps(trimmed)
+        except Exception:
+            results_json = json.dumps({"error": "results too large"})
+
     c.execute("""
         INSERT INTO scan_results (scan_id, username, target, target_type, scan_type, results)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (scan_id, username, target, target_type, scan_type, json.dumps(results)))
+    """, (scan_id, username, target, target_type, scan_type, results_json))
     conn.commit()
     conn.close()
     return scan_id
+
+
+# Background pruner for request_counts to prevent unbounded growth. Runs
+# every minute and removes entries older than the window (default 60s).
+def _start_request_counts_pruner(interval_seconds=60, window_seconds=60):
+    import threading
+
+    def pruner():
+        while True:
+            now = time.time()
+            window_start = now - window_seconds
+            keys = list(request_counts.keys())
+            for k in keys:
+                cleaned = [t for t in request_counts.get(k, []) if t > window_start]
+                if cleaned:
+                    request_counts[k] = cleaned
+                else:
+                    request_counts.pop(k, None)
+            time.sleep(interval_seconds)
+
+    t = threading.Thread(target=pruner, daemon=True)
+    t.start()
+
+
+# Start the pruner at import time
+_start_request_counts_pruner()
 
 def get_scan_results(scan_id, username):
     conn = get_scan_db_connection()
@@ -225,6 +284,8 @@ def login():
         if row and check_password_hash(row[0], password):
             session["user"] = username
             session.permanent = False  # Session expires when browser closes
+            # Generate CSRF token for the session
+            session['csrf_token'] = uuid.uuid4().hex
             flash("Login successful!", "success")
             return redirect(url_for("dashboard"))
         else:
@@ -232,6 +293,32 @@ def login():
             return redirect(url_for("login"))
 
     return render_template("login.html")
+
+
+@app.before_request
+def _csrf_protect():
+    # Only enforce CSRF for state-changing methods
+    if request.method in ('POST', 'PUT', 'DELETE'):
+        # Allow login and register to proceed (they generate tokens)
+        if request.endpoint in ('login', 'register'):
+            return None
+
+        token = session.get('csrf_token')
+        if not token:
+            abort(400, 'Missing CSRF token in session')
+
+        # Accept token in header or form
+        header_token = request.headers.get('X-CSRF-Token')
+        form_token = request.form.get('csrf_token') if request.form else None
+        if header_token == token or form_token == token:
+            return None
+        abort(400, 'Invalid CSRF token')
+
+
+    # Expose csrf_token to templates so forms and JS can access it
+    @app.context_processor
+    def inject_csrf_token():
+        return {"csrf_token": session.get('csrf_token', '')}
 
 @app.route("/register", methods=["GET", "POST"])
 @rate_limit(max_requests=3, window_seconds=300)
@@ -252,6 +339,8 @@ def register():
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
             conn.commit()
             conn.close()
+            # Generate CSRF token for the new session (user should login next)
+            session['csrf_token'] = uuid.uuid4().hex
             flash("Registration successful! Please login.", "success")
             return redirect(url_for("login"))
         except sqlite3.IntegrityError:

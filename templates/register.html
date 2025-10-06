@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Register</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <body style="background: url('{{ url_for('static', filename='/images/background.jpg.jpg') }}') no-repeat center center; background-size: cover;">
+    <body class="auth-bg">
 
     <div class="auth-container">
-        <img src="{{ url_for('static', filename='/images/logo.png') }}" class="logo" alt="Logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" class="logo" alt="Logo">
         <h2 class="title">Register</h2>
 
         <!-- Flash messages only for registration -->
@@ -25,6 +25,7 @@
 
         <!-- Registration form -->
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="input-group">
                 <input type="text" name="username" placeholder="Choose a username" required>
             </div>

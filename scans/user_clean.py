@@ -21,6 +21,38 @@ except json.JSONDecodeError:
     DATA = {}
 
 
+    def validate_users_json(data):
+        """Basic validation of users.json entries to detect common misconfigurations.
+        - Warn if an entry has no URL placeholder
+        - Warn if entries use mixed placeholder styles across the file
+        """
+        if not isinstance(data, dict):
+            print("Warning: users.json should be an object/dictionary of sites")
+            return
+
+        uses_positional = False
+        uses_named = False
+        for sitename, info in data.items():
+            url = info.get("url") if isinstance(info, dict) else None
+            if not url:
+                print(f"Warning: site '{sitename}' missing 'url' field in users.json")
+                continue
+            if "{}" in url:
+                uses_positional = True
+            if "{username}" in url:
+                uses_named = True
+            if "{}" not in url and "{username}" not in url:
+                # Not fatal, but warn: URL may be static or require different formatting
+                print(f"Warning: site '{sitename}' url does not contain a username placeholder: {url}")
+
+        if uses_positional and uses_named:
+            print("Warning: users.json uses both positional '{}' and named '{username}' placeholders; this can cause formatting confusion. Consider standardizing to '{username}'.")
+
+
+    # Run a validation at import time to surface issues early
+    validate_users_json(DATA)
+
+
 def _format_url(template, username):
     """Safely format URL templates that may use positional '{}' or named '{username}' placeholders.
     Tries several strategies and falls back to a simple replace if formatting fails.
