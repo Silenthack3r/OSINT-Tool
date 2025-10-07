@@ -258,18 +258,19 @@ def store_scan_results(username, target, target_type, scan_type, results):
     scan_id = str(uuid.uuid4())
     conn = get_scan_db_connection()
     c = conn.cursor()
-    # Cap results size to avoid storing extremely large payloads (trim if necessary)
-    results_json = json.dumps(results)
-    MAX_RESULT_BYTES = 200000  # ~200KB
+
+    # Convert only serializable types
+    try:
+        results_json = json.dumps(results or {})
+    except TypeError:
+        results_json = json.dumps({"error": "results not serializable"})
+
+    MAX_RESULT_BYTES = 200000
     if len(results_json.encode('utf-8')) > MAX_RESULT_BYTES:
-        # Trim sites list to keep most relevant info
-        try:
-            trimmed = results.copy()
-            if isinstance(trimmed.get('sites'), list):
-                trimmed['sites'] = trimmed['sites'][:100]
-            results_json = json.dumps(trimmed)
-        except Exception:
-            results_json = json.dumps({"error": "results too large"})
+        trimmed = results.copy()
+        if isinstance(trimmed.get('sites'), list):
+            trimmed['sites'] = trimmed['sites'][:100]
+        results_json = json.dumps(trimmed)
 
     c.execute("""
         INSERT INTO scan_results (scan_id, username, target, target_type, scan_type, results)
@@ -278,6 +279,7 @@ def store_scan_results(username, target, target_type, scan_type, results):
     conn.commit()
     conn.close()
     return scan_id
+
 
 
 # Background pruner for request_counts to prevent unbounded growth. Runs
@@ -488,17 +490,23 @@ def scan():
         # ... add other scan types here as needed
 
         # Store results
+        # After storing results
         scan_id = store_scan_results(session["user"], target, target_type, scan_type, results)
         session['last_scan_id'] = scan_id
         cleanup_old_scans()
 
+        # Ensure results are always a serializable dict
+        safe_results = results if isinstance(results, dict) else {}
+
         return render_template(
             "dashboard.html",
-            username=session["user"],
-            target=target,
-            results=results,
-            scan_id=scan_id
+            username=session.get("user", "unknown"),
+            target=target or "",
+            results=safe_results,
+            scan_id=scan_id,
+            recent_scan=safe_results
         )
+
 
     except Exception as e:
         app.logger.error(f"Scan error: {str(e)}", exc_info=True)
