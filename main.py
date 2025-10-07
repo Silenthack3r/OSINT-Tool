@@ -570,6 +570,83 @@ def ask_ai():
 
     return jsonify({"answer": answer}), 200
 
+
+@app.route("/ask_ai", methods=["POST"])
+@login_required
+def ask_ai():
+    # Ensure content-type is application/json
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+
+    data = request.get_json()
+    question = data.get("question", "").strip()
+
+    if not question:
+        return jsonify({"error": "No question provided"}), 400
+
+    # Get scan results from database using scan ID
+    if "last_scan_id" not in session:
+        return jsonify({"error": "No scan results found. Run a scan first."}), 400
+
+    scan_results = get_scan_results(session['last_scan_id'], session["user"])
+    if not scan_results:
+        return jsonify({"error": "Scan results not found or expired."}), 400
+
+    sites = scan_results.get("sites", [])
+
+    # Convert scan results into readable text for AI
+    scan_text_lines = []
+    for site in sites:
+        # Fallback to empty dict if site is malformed
+        site = site or {}
+        site_name = site.get("site", "Unknown Site")
+        url = site.get("url", "")
+        found = "Found" if site.get("found") else "Not Found"
+        scan_text_lines.append(f"{site_name}: {found} ({url})")
+
+    scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and short way and proffesional as possible and try to answer questions as much as you can."},
+        {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
+    ]
+
+    try:
+        # Test if API key is available
+        if not OPENROUTER_API_KEY:
+            return jsonify({"error": "AI service is currently unavailable"}), 503
+
+        completion = client.chat.completions.create(
+            model="x-ai/grok-4-fast:free",
+            messages=messages,
+            extra_headers={
+                "HTTP-Referer": "http://localhost:5000",
+                "X-Title": "CyberRecon Dashboard"
+            }
+        )
+
+        # Access the message safely
+        answer = completion.choices[0].message.content
+        # Store AI history in database if needed, or keep minimal in session
+        if "ai_history" not in session:
+            session["ai_history"] = []
+        # Keep only last 5 questions to avoid session bloat
+        session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
+
+        return jsonify({"answer": answer})
+
+    except Exception as e:
+        # Log the error but don't expose details to user
+        app.logger.error(f"AI request failed: {str(e)}")
+        
+        # Check if it's an API key error
+        if "401" in str(e) or "auth" in str(e).lower():
+            return jsonify({"error": "AI service authentication failed"}), 503
+        elif "429" in str(e):
+            return jsonify({"error": "AI service rate limit exceeded. Please try again later."}), 429
+        else:
+            return jsonify({"error": "AI service is temporarily unavailable. Please try again later."}), 500
+
 @app.route('/report')
 @login_required
 def report():
