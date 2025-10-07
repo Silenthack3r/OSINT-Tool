@@ -23,6 +23,13 @@ import re
 from functools import wraps
 import threading
 background_scans = {}
+from openai import OpenAI
+OPENROUTER_API_KEY = os.environ.get("API_KEY")
+client = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=OPENROUTER_API_KEY,
+)
+
 try:
     from flask_session import Session
 except Exception:
@@ -463,20 +470,20 @@ def scan():
         if target_type == "username" and scan_type == "clean":
             raw_results = user_clean.run(target)
             sites = []
-            for r in raw_results["sites"]:
+            for r in raw_results.get("sites", []):
                 sites.append({
-                    "site": r["site"],
-                    "url": r["url"],
-                    "found": r.get("found", False)
+                    "site": str(r.get("site", "")),
+                    "url": str(r.get("url", "")),
+                    "found": bool(r.get("found", False))
                 })
-                # Delay 1 second per site to avoid skipping
                 time.sleep(1)
-
+            
             results = {
-                "target": target,
+                "target": str(target),
                 "status": "completed",
                 "sites": sites
             }
+
 
         # ... add other scan types here as needed
 
@@ -494,8 +501,10 @@ def scan():
         )
 
     except Exception as e:
-        app.logger.error(f"Scan error: {str(e)}")
-        flash("Scan failed due to an internal error", "danger")
+        app.logger.error(f"Scan error: {str(e)}", exc_info=True)
+        session.pop('csrf_token', None)  # Reset CSRF token to avoid serialization issues
+        session['csrf_token'] = uuid.uuid4().hex
+        flash("Scan failed — CSRF token refreshed. Try again.", "danger")
         return render_template(
             "dashboard.html",
             username=session.get("user", "unknown"),
@@ -520,132 +529,34 @@ def ask_ai():
     if not question or len(question) > 1000:
         return jsonify({"error": "Invalid question"}), 400
 
-    if "last_scan_id" not in session:
-        return jsonify({"error": "No scan results found"}), 400
-
-    scan_results = get_scan_results(session['last_scan_id'], session["user"])
-    if not scan_results:
-        return jsonify({"error": "Scan results not found"}), 400
-
-    # Lightweight local 'AI' responder (no external network required).
-    # This is a deterministic summarizer that answers common questions
-    # about the most recent scan results. If you want a full LLM
-    # integration later, we can add an OpenAI/other provider path that
-    # uses an API key stored in an environment variable.
-
-    def _summarize_scan(scan):
-        if not scan:
-            return "No scan results available."
-        summary = scan.get('summary', {})
-        parts = []
-        parts.append(f"Target: {scan.get('target', 'unknown')}")
-        parts.append(f"Status: {scan.get('status', 'unknown')}")
-        if summary:
-            parts.append(f"Found on {summary.get('found_sites', 0)} out of {summary.get('total_sites', 0)} sites")
-            parts.append(f"Scan time: {summary.get('scan_time_seconds', 'N/A')}s")
-        return " | ".join(parts)
-
-    def _list_found_sites(scan, limit=20):
-        if not scan:
-            return "No scan results available."
-        sites = [s for s in scan.get('sites', []) if s.get('found')]
-        if not sites:
-            return "No sites were found for this target."
-        lines = [f"{s.get('site')}: {s.get('url')}" for s in sites[:limit]]
-        return "\n".join(lines)
-
-    q = question.lower()
-    answer = "I'm not sure how to answer that. Try asking for a 'summary' or 'where was it found'."
-
-    if 'summary' in q or 'overview' in q or 'status' in q:
-        answer = _summarize_scan(scan_results)
-    elif 'where' in q or 'found' in q or 'sites' in q or 'which' in q:
-        answer = _list_found_sites(scan_results, limit=50)
-    elif 'top' in q or 'most' in q:
-        # Show top-found sites by order
-        answer = _list_found_sites(scan_results, limit=10)
-    else:
-        # Default to a short summary followed by found sites
-        answer = _summarize_scan(scan_results) + "\n\nFound sites:\n" + _list_found_sites(scan_results, limit=10)
-
-    return jsonify({"answer": answer}), 200
-
-
-@app.route("/ask_ai", methods=["POST"])
-@login_required
-def ask_ai():
-    # Ensure content-type is application/json
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 400
-
-    data = request.get_json()
-    question = data.get("question", "").strip()
-
-    if not question:
-        return jsonify({"error": "No question provided"}), 400
-
-    # Get scan results from database using scan ID
-    if "last_scan_id" not in session:
-        return jsonify({"error": "No scan results found. Run a scan first."}), 400
-
-    scan_results = get_scan_results(session['last_scan_id'], session["user"])
-    if not scan_results:
-        return jsonify({"error": "Scan results not found or expired."}), 400
-
-    sites = scan_results.get("sites", [])
-
-    # Convert scan results into readable text for AI
-    scan_text_lines = []
-    for site in sites:
-        # Fallback to empty dict if site is malformed
-        site = site or {}
-        site_name = site.get("site", "Unknown Site")
-        url = site.get("url", "")
-        found = "Found" if site.get("found") else "Not Found"
-        scan_text_lines.append(f"{site_name}: {found} ({url})")
-
-    scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
-
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and short way and proffesional as possible and try to answer questions as much as you can."},
-        {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
-    ]
-
     try:
-        # Test if API key is available
-        if not OPENROUTER_API_KEY:
-            return jsonify({"error": "AI service is currently unavailable"}), 503
+        from openai import OpenAI
+        import os
+
+        global client
 
         completion = client.chat.completions.create(
-            model="x-ai/grok-4-fast:free",
-            messages=messages,
             extra_headers={
-                "HTTP-Referer": "http://localhost:5000",
-                "X-Title": "CyberRecon Dashboard"
-            }
+                "HTTP-Referer": "https://your-site-url.com",  # optional
+                "X-Title": "AllSent Tool",  # optional
+            },
+            extra_body={},
+            model="deepseek/deepseek-chat-v3.1:free",
+            messages=[
+                {
+                    "role": "user",
+                    "content": question  # direct user input
+                }
+            ]
         )
 
-        # Access the message safely
-        answer = completion.choices[0].message.content
-        # Store AI history in database if needed, or keep minimal in session
-        if "ai_history" not in session:
-            session["ai_history"] = []
-        # Keep only last 5 questions to avoid session bloat
-        session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
-
-        return jsonify({"answer": answer})
+        answer = completion.choices[0].message.content.strip()
+        return jsonify({"answer": answer}), 200
 
     except Exception as e:
-        # Log the error but don't expose details to user
-        app.logger.error(f"AI request failed: {str(e)}")
-        
-        # Check if it's an API key error
-        if "401" in str(e) or "auth" in str(e).lower():
-            return jsonify({"error": "AI service authentication failed"}), 503
-        elif "429" in str(e):
-            return jsonify({"error": "AI service rate limit exceeded. Please try again later."}), 429
-        else:
-            return jsonify({"error": "AI service is temporarily unavailable. Please try again later."}), 500
+        app.logger.error(f"AI request failed: {str(e)}", exc_info=True)
+        return jsonify({"error": "AI service unavailable"}), 500
+
 
 @app.route('/report')
 @login_required
@@ -668,6 +579,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port)
+
 
 
 
