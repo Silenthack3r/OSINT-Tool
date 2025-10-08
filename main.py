@@ -447,7 +447,7 @@ def logout():
 
 
 
-@app.route('/scan', methods=['POST'])
+@app.route("/scan", methods=['POST'])
 @login_required
 @rate_limit(max_requests=100, window_seconds=60)
 def scan():
@@ -502,30 +502,21 @@ def scan():
                 from scans.fullname import run as fullname_run
                 raw_results = fullname_run(target)
                 
-                # Clean the results
-                def clean_json(obj):
-                    if obj is None:
-                        return None
-                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
-                        return None
-                    elif isinstance(obj, dict):
-                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
-                    elif isinstance(obj, list):
-                        return [clean_json(item) for item in obj if item is not None]
-                    else:
-                        return obj
+                # Transform the fullname results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": [],
+                    "error": raw_results.get("error")
+                }
                 
-                results = clean_json(raw_results)
-                
-                # Ensure basic structure
-                if not isinstance(results, dict):
-                    results = {}
-                if 'sites' not in results:
-                    results['sites'] = []
-                if 'target' not in results:
-                    results['target'] = str(target)
-                if 'status' not in results:
-                    results['status'] = 'completed'
+                # Convert fullname-specific results to the standard sites format
+                if "sites" in raw_results:
+                    results["sites"] = raw_results["sites"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
                     
             except Exception as e:
                 results = {
@@ -541,32 +532,35 @@ def scan():
                 from scans.email import run as email_run
                 raw_results = email_run(target)
                 
-                # Clean the results
-                def clean_json(obj):
-                    if obj is None:
-                        return None
-                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
-                        return None
-                    elif isinstance(obj, dict):
-                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
-                    elif isinstance(obj, list):
-                        return [clean_json(item) for item in obj if item is not None]
-                    else:
-                        return obj
+                # Transform the complex email results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": [],
+                    "breaches": [],
+                    "social_profiles": [],
+                    "technical_info": {},
+                    "error": raw_results.get("error")
+                }
                 
-                results = clean_json(raw_results)
+                # Convert email-specific results to the standard sites format
+                if "sites" in raw_results:
+                    results["sites"] = raw_results["sites"]
                 
-                # Ensure basic structure
-                if not isinstance(results, dict):
-                    results = {}
-                if 'sites' not in results:
-                    results['sites'] = []
-                if 'target' not in results:
-                    results['target'] = str(target)
-                if 'status' not in results:
-                    results['status'] = 'completed'
+                # Add breaches if available
+                if "breaches" in raw_results:
+                    results["breaches"] = raw_results["breaches"]
+                    
+                # Add social profiles if available  
+                if "social_profiles" in raw_results:
+                    results["social_profiles"] = raw_results["social_profiles"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
                     
             except Exception as e:
+                app.logger.error(f"Email scan error: {str(e)}", exc_info=True)
                 results = {
                     "target": str(target),
                     "status": "error",
@@ -583,32 +577,59 @@ def scan():
                 from scans.phone import run as phone_run
                 raw_results = phone_run(target, country_code)
                 
-                # Clean the results
-                def clean_json(obj):
-                    if obj is None:
-                        return None
-                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
-                        return None
-                    elif isinstance(obj, dict):
-                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
-                    elif isinstance(obj, list):
-                        return [clean_json(item) for item in obj if item is not None]
-                    else:
-                        return obj
+                # Transform the phone results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": [],
+                    "carrier_info": {},
+                    "location_info": {},
+                    "social_profiles": [],
+                    "breach_data": [],
+                    "technical_info": {},
+                    "threat_intel": [],
+                    "number_analysis": {},
+                    "error": raw_results.get("error")
+                }
                 
-                results = clean_json(raw_results)
-                
-                # Ensure basic structure
-                if not isinstance(results, dict):
-                    results = {}
-                if 'sites' not in results:
-                    results['sites'] = []
-                if 'target' not in results:
-                    results['target'] = str(target)
-                if 'status' not in results:
-                    results['status'] = 'completed'
+                # Convert phone-specific results to the standard sites format
+                if "sites" in raw_results:
+                    results["sites"] = raw_results["sites"]
+                    
+                # Add carrier info if available
+                if "carrier_info" in raw_results:
+                    results["carrier_info"] = raw_results["carrier_info"]
+                    
+                # Add location info if available
+                if "location_info" in raw_results:
+                    results["location_info"] = raw_results["location_info"]
+                    
+                # Add social profiles if available
+                if "social_profiles" in raw_results:
+                    results["social_profiles"] = raw_results["social_profiles"]
+                    
+                # Add breach data if available
+                if "breach_data" in raw_results:
+                    results["breach_data"] = raw_results["breach_data"]
+                    
+                # Add technical info if available
+                if "technical_info" in raw_results:
+                    results["technical_info"] = raw_results["technical_info"]
+                    
+                # Add threat intelligence if available
+                if "threat_intel" in raw_results:
+                    results["threat_intel"] = raw_results["threat_intel"]
+                    
+                # Add number analysis if available
+                if "number_analysis" in raw_results:
+                    results["number_analysis"] = raw_results["number_analysis"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
                     
             except Exception as e:
+                app.logger.error(f"Phone scan error: {str(e)}", exc_info=True)
                 results = {
                     "target": str(target),
                     "status": "error",
@@ -629,30 +650,37 @@ def scan():
                 from scans.darkuser import run as darkuser_run
                 raw_results = darkuser_run(target, target_type)
                 
-                # Clean the results
-                def clean_json(obj):
-                    if obj is None:
-                        return None
-                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
-                        return None
-                    elif isinstance(obj, dict):
-                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
-                    elif isinstance(obj, list):
-                        return [clean_json(item) for item in obj if item is not None]
-                    else:
-                        return obj
+                # Transform the dark web results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "target_type": target_type,
+                    "status": raw_results.get("status", "completed"),
+                    "darkweb_results": [],
+                    "leaks_found": [],
+                    "breach_data": [],
+                    "onion_service_results": {},
+                    "error": raw_results.get("error")
+                }
                 
-                results = clean_json(raw_results)
-                
-                # Ensure basic structure
-                if not isinstance(results, dict):
-                    results = {}
-                if 'sites' not in results:
-                    results['sites'] = []
-                if 'target' not in results:
-                    results['target'] = str(target)
-                if 'status' not in results:
-                    results['status'] = 'completed'
+                # Convert dark web specific results
+                if "darkweb_results" in raw_results:
+                    results["darkweb_results"] = raw_results["darkweb_results"]
+                    
+                # Add leaks found if available
+                if "leaks_found" in raw_results:
+                    results["leaks_found"] = raw_results["leaks_found"]
+                    
+                # Add breach data if available
+                if "breach_data" in raw_results:
+                    results["breach_data"] = raw_results["breach_data"]
+                    
+                # Add onion service results if available
+                if "onion_service_results" in raw_results:
+                    results["onion_service_results"] = raw_results["onion_service_results"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
                     
             except Exception as e:
                 results = {
@@ -781,7 +809,6 @@ def scan():
             scan_id=None,
             recent_scan=None
         )
-
 
 @app.route("/ask_ai", methods=["POST"])
 @login_required

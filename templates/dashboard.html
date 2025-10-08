@@ -302,7 +302,10 @@
                 <option value="dark">Dark Web</option>
             </select>
             
-            <button type="submit" class="scan-btn">🚀 Start Scan</button>
+            <button type="submit" class="scan-btn" id="scanBtn">
+    <span id="scanText">🚀 Start Scan</span>
+    <div id="scanSpinner" class="spinner" style="display: none;"></div>
+</button>
         </form>
 
         <script>
@@ -414,7 +417,183 @@
                         {% endfor %}
                     </ul>
                     {% endif %}
+                     <!-- Email-specific Results -->
+{% if results.breaches %}
+<h3 class="prompt">Breach Findings:</h3>
+<ul class="sites-list">
+    {% for breach in results.breaches %}
+    <li class="site-item found-item">
+        <strong>{{ breach.site }}:</strong>
+        {% if breach.url %}
+            <a href="{{ breach.url }}" target="_blank" class="clickable-link">
+                {{ breach.details|default('Breach data found') }}
+            </a>
+        {% else %}
+            <span class="url-text">{{ breach.details|default('Breach data found') }}</span>
+        {% endif %}
+        <span class="type-badge leak">BREACH</span>
+        <span class="status-badge">⚠️ COMPROMISED</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
 
+{% if results.social_profiles %}
+<h3 class="prompt">Social Media Profiles:</h3>
+<ul class="sites-list">
+    {% for profile in results.social_profiles %}
+    <li class="site-item found-item">
+        <strong>{{ profile.site }}:</strong>
+        {% if profile.url %}
+            <a href="{{ profile.url }}" target="_blank" class="clickable-link">
+                {{ profile.details|default('Profile found') }}
+            </a>
+        {% else %}
+            <span class="url-text">{{ profile.details|default('Profile found') }}</span>
+        {% endif %}
+        <span class="type-badge profile">SOCIAL</span>
+        <span class="status-badge">✓ FOUND</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<!-- Email Summary Information -->
+{% if results.summary %}
+<div class="scan-status status-completed">
+    <strong>Email Analysis Summary:</strong><br>
+    <strong>Services Checked:</strong> {{ results.summary.total_services_checked }}<br>
+    <strong>Successful Finds:</strong> {{ results.summary.successful_finds }}<br>
+    {% if results.summary.breach_findings is defined %}
+    <strong>Breach Findings:</strong> {{ results.summary.breach_findings }}<br>
+    {% endif %}
+    {% if results.summary.social_profiles is defined %}
+    <strong>Social Profiles:</strong> {{ results.summary.social_profiles }}<br>
+    {% endif %}
+    {% if results.summary.computers_compromised is defined %}
+    <strong>Compromised Computers:</strong> {{ results.summary.computers_compromised }}<br>
+    {% endif %}
+    {% if results.summary.risk_assessment %}
+    <strong>Risk Assessment:</strong> 
+    <span class="{% if results.summary.risk_assessment == 'High' %}risk-high{% elif results.summary.risk_assessment == 'Medium' %}risk-medium{% else %}risk-low{% endif %}">
+        {{ results.summary.risk_assessment }}
+    </span>
+    {% endif %}
+</div>
+{% endif %}
+                     <!-- Phone Number Specific Results -->
+{% if results.summary and target_type == "phone" %}
+<div class="scan-status status-completed">
+    <strong>Phone Analysis Summary:</strong><br>
+    <strong>Formatted Number:</strong> {{ results.summary.formatted_number }}<br>
+    <strong>Services Checked:</strong> {{ results.summary.total_services_checked }}<br>
+    <strong>Successful Finds:</strong> {{ results.summary.successful_finds }}<br>
+    <strong>Social Profiles:</strong> {{ results.summary.social_profiles }}<br>
+    <strong>Breach Findings:</strong> {{ results.summary.breach_findings }}<br>
+    <strong>Name Identified:</strong> {{ "Yes" if results.summary.name_identified else "No" }}<br>
+    <strong>Threat Indicators:</strong> {{ results.summary.threat_indicators }}<br>
+    <strong>Carrier Info:</strong> {{ "Found" if results.summary.carrier_info_found else "Not Found" }}<br>
+    <strong>Location Info:</strong> {{ "Found" if results.summary.location_info_found else "Not Found" }}
+</div>
+{% endif %}
+
+{% if results.carrier_info and target_type == "phone" %}
+<h3 class="prompt">Carrier Information:</h3>
+<ul class="sites-list">
+    {% for key, value in results.carrier_info.items() %}
+    <li class="site-item found-item">
+        <strong>{{ key|title }}:</strong> {{ value }}
+        <span class="type-badge record">CARRIER</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if results.location_info and target_type == "phone" %}
+<h3 class="prompt">Location Information:</h3>
+<ul class="sites-list">
+    {% for key, value in results.location_info.items() %}
+    <li class="site-item found-item">
+        <strong>{{ key|title }}:</strong> {{ value }}
+        <span class="type-badge record">LOCATION</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if results.social_profiles and target_type == "phone" %}
+<h3 class="prompt">Social Media Profiles:</h3>
+<ul class="sites-list">
+    {% for profile in results.social_profiles %}
+    <li class="site-item found-item">
+        <strong>{{ profile.platform }}:</strong>
+        {% if profile.url %}
+            <a href="{{ profile.url }}" target="_blank" class="clickable-link">
+                {{ profile.type|title }} Profile
+            </a>
+        {% else %}
+            <span class="url-text">{{ profile.type|title }} Profile</span>
+        {% endif %}
+        <span class="type-badge profile">{{ profile.type|upper }}</span>
+        <span class="status-badge">✓ LINKED</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if results.breach_data and target_type == "phone" %}
+<h3 class="prompt">Breach Findings:</h3>
+<ul class="sites-list">
+    {% for breach in results.breach_data %}
+    <li class="site-item found-item">
+        <strong>{{ breach.site }}:</strong>
+        {% if breach.url %}
+            <a href="{{ breach.url }}" target="_blank" class="clickable-link">
+                {{ breach.details|default('Breach data found') }}
+            </a>
+        {% else %}
+            <span class="url-text">{{ breach.details|default('Breach data found') }}</span>
+        {% endif %}
+        <span class="type-badge leak">BREACH</span>
+        <span class="status-badge">⚠️ COMPROMISED</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if results.threat_intel and target_type == "phone" %}
+<h3 class="prompt">Threat Intelligence:</h3>
+<ul class="sites-list">
+    {% for threat in results.threat_intel %}
+    <li class="site-item found-item">
+        <span class="threat-indicator">⚠️</span> {{ threat }}
+        <span class="type-badge leak">THREAT</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if results.sites and target_type == "phone" %}
+<h3 class="prompt">Lookup Results:</h3>
+<ul class="sites-list">
+    {% for site in results.sites %}
+    <li class="site-item {% if site.found %}found-item{% else %}not-found-item{% endif %}">
+        <strong>{{ site.site }}:</strong>
+        {% if site.found and site.url %}
+            <a href="{{ site.url }}" target="_blank" class="clickable-link">
+                {{ site.details|default('Information available') }}
+            </a>
+        {% else %}
+            <span class="url-text">{{ site.details|default('No information') }}</span>
+        {% endif %}
+        {% if site.type %}
+        <span class="type-badge {{ site.type }}">{{ site.type|upper }}</span>
+        {% endif %}
+        <span class="status-badge">{% if site.found %}✓ FOUND{% else %}✗ NOT FOUND{% endif %}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
                     <!-- Leaks Found -->
                     {% if results.leaks_found %}
                     <h3 class="prompt">Leaks Found:</h3>
@@ -687,7 +866,53 @@
         }
         
         animateFollower();
-        
+        // Fullscreen loading overlay
+document.getElementById("scanForm").addEventListener("submit", function(e) {
+    const targetInput = document.getElementById("targetInput").value;
+    const targetType = document.getElementById("targetTypeSelect").value;
+    
+    // Update loading text with target info
+    document.getElementById("loadingTarget").textContent = targetInput;
+    
+    // Show fullscreen overlay
+    document.getElementById("fullscreenLoading").style.display = "flex";
+    
+    // Also update button state
+    const scanBtn = document.getElementById("scanBtn");
+    const scanText = document.getElementById("scanText");
+    const scanSpinner = document.getElementById("scanSpinner");
+    
+    scanBtn.disabled = true;
+    scanText.textContent = "Scanning...";
+    if (scanSpinner) scanSpinner.style.display = "inline-block";
+    
+    // Clear any existing results to show fresh loading state
+    const scanResults = document.getElementById("scan-results");
+    scanResults.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #64748b;">
+            <p>Starting scan... Please wait</p>
+        </div>
+    `;
+});
+
+// Hide loading overlay when page loads (in case of back button)
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById("fullscreenLoading").style.display = "none";
+    
+    // Reset button state
+    const scanBtn = document.getElementById("scanBtn");
+    const scanText = document.getElementById("scanText");
+    const scanSpinner = document.getElementById("scanSpinner");
+    
+    if (scanBtn) scanBtn.disabled = false;
+    if (scanText) scanText.textContent = "🚀 Start Scan";
+    if (scanSpinner) scanSpinner.style.display = "none";
+});
+
+// Also hide loading if user goes back
+window.addEventListener('pageshow', function() {
+    document.getElementById("fullscreenLoading").style.display = "none";
+});
         // Create floating particles
         function createParticles() {
             const particlesContainer = document.querySelector('.interactive-bg');
@@ -738,7 +963,15 @@
         checkScanResults();
     });
     </script>
-
+<!-- Fullscreen Loading Overlay -->
+<div id="fullscreenLoading" class="loading-overlay">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <h3 class="loading-title">OSINT Scan in Progress</h3>
+        <p class="loading-text">Scanning: <span id="loadingTarget" class="target-name"></span></p>
+        <p class="loading-subtext">This may take 10-30 seconds</p>
+    </div>
+</div>
 </body>
 <script src="{{ url_for('static', filename='csrf.js') }}"></script>
 </html>
