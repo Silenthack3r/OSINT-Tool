@@ -528,6 +528,7 @@ def scan():
 @login_required
 @rate_limit(max_requests=10, window_seconds=300)
 def ask_ai():
+    # Ensure content-type is application/json
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
 
@@ -537,29 +538,52 @@ def ask_ai():
     if not question or len(question) > 1000:
         return jsonify({"error": "Invalid question"}), 400
 
+    # Get scan results from database using scan ID
+    if "last_scan_id" not in session:
+        return jsonify({"error": "No scan results found. Run a scan first."}), 400
+
+    scan_results = get_scan_results(session['last_scan_id'], session["user"])
+    if not scan_results:
+        return jsonify({"error": "Scan results not found or expired."}), 400
+
+    sites = scan_results.get("sites", [])
+
+    # Convert scan results into readable text for AI
+    scan_text_lines = []
+    for site in sites:
+        # Fallback to empty dict if site is malformed
+        site = site or {}
+        site_name = site.get("site", "Unknown Site")
+        url = site.get("url", "")
+        found = "Found" if site.get("found") else "Not Found"
+        scan_text_lines.append(f"{site_name}: {found} ({url})")
+
+    scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and in very very short way and proffesional as possible and also don forget to make the user aware about cybersecuirty and PII protectin."},
+        {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
+    ]
+
     try:
-        from openai import OpenAI
-        import os
-
-        global client
-
         completion = client.chat.completions.create(
+            model="x-ai/grok-4-fast:free",
+            messages=messages,
             extra_headers={
-                "HTTP-Referer": "https://your-site-url.com",  # optional
-                "X-Title": "AllSent Tool",  # optional
-            },
-            extra_body={},
-            model="deepseek/deepseek-chat-v3.1:free",
-            messages=[
-                {
-                    "role": "user",
-                    "content": question  # direct user input
-                }
-            ]
+                "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
+                "X-Title": "OsintCrowd Dashboard"
+            }
         )
 
-        answer = completion.choices[0].message.content.strip()
-        return jsonify({"answer": answer}), 200
+        # Access the message safely
+        answer = completion.choices[0].message.content
+        # Store AI history in database if needed, or keep minimal in session
+        if "ai_history" not in session:
+            session["ai_history"] = []
+        # Keep only last 5 questions to avoid session bloat
+        session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
+
+        return jsonify({"answer": answer})
 
     except Exception as e:
         app.logger.error(f"AI request failed: {str(e)}", exc_info=True)

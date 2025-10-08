@@ -74,12 +74,7 @@
     "url": "https://medium.com/@{}",
     "urlMain": "https://medium.com/"
   },
-  "DeviantART": {
-    "errorType": "status_code",
-    "url": "https://{}.deviantart.com",
-    "urlMain": "https://deviantart.com"
-  },
-  "Vimeo": {
+    "Vimeo": {
     "errorType": "status_code",
     "url": "https://vimeo.com/{}",
     "urlMain": "https://vimeo.com/"
@@ -99,12 +94,7 @@
     "url": "https://www.flickr.com/people/{}",
     "urlMain": "https://www.flickr.com/"
   },
-  "Dribbble": {
-    "errorType": "message",
-    "url": "https://dribbble.com/{}",
-    "urlMain": "https://dribbble.com/"
-  },
-  "Behance": {
+    "Behance": {
     "errorType": "status_code",
     "url": "https://www.behance.net/{}",
     "urlMain": "https://www.behance.net/"
@@ -274,12 +264,7 @@
     "url": "https://hubpages.com/@{}",
     "urlMain": "https://hubpages.com/"
   },
-  "IFTTT": {
-    "errorType": "status_code",
-    "url": "https://www.ifttt.com/p/{}",
-    "urlMain": "https://www.ifttt.com/"
-  },
-  "Imgur": {
+    "Imgur": {
     "errorType": "status_code",
     "url": "https://imgur.com/user/{}",
     "urlMain": "https://imgur.com/"
@@ -294,12 +279,7 @@
     "url": "https://kik.me/{}",
     "urlMain": "http://kik.me/"
   },
-  "Letterboxd": {
-    "errorType": "message",
-    "url": "https://letterboxd.com/{}",
-    "urlMain": "https://letterboxd.com/"
-  },
-  "Mixcloud": {
+    "Mixcloud": {
     "errorType": "status_code",
     "url": "https://www.mixcloud.com/{}/",
     "urlMain": "https://www.mixcloud.com/"
@@ -344,12 +324,7 @@
     "url": "https://slideshare.net/{}",
     "urlMain": "https://slideshare.net/"
   },
-  "Smule": {
-    "errorType": "message",
-    "url": "https://www.smule.com/{}",
-    "urlMain": "https://www.smule.com/"
-  },
-  "SoundCloud": {
+    "SoundCloud": {
     "errorType": "status_code",
     "url": "https://soundcloud.com/{}",
     "urlMain": "https://soundcloud.com/"
@@ -359,12 +334,7 @@
     "url": "https://open.spotify.com/user/{}",
     "urlMain": "https://open.spotify.com/"
   },
-  "Strava": {
-    "errorType": "status_code",
-    "url": "https://www.strava.com/athletes/{}",
-    "urlMain": "https://www.strava.com/"
-  },
-  "Telegram": {
+    "Telegram": {
     "errorType": "message",
     "url": "https://t.me/{}",
     "urlMain": "https://t.me/"
