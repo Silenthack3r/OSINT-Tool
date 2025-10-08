@@ -469,28 +469,289 @@ def scan():
     results = {}
 
     try:
+        # --- USERNAME CLEAN SCAN ---
         if target_type == "username" and scan_type == "clean":
-            raw_results = user_clean.run(target)
-            sites = []
-            for r in raw_results.get("sites", []):
-                sites.append({
-                    "site": str(r.get("site", "")),
-                    "url": str(r.get("url", "")),
-                    "found": bool(r.get("found", False))
-                })
-                time.sleep(1)
-            
-            results = {
-                "target": str(target),
-                "status": "completed",
-                "sites": sites
-            }
+            try:
+                raw_results = user_clean.run(target)
 
+                # normalize into ask_ai format
+                sites = []
+                for r in raw_results.get("sites", []):
+                    sites.append({
+                        "site": str(r.get("site", "")),
+                        "url": str(r.get("url", "")),
+                        "found": bool(r.get("found", False))
+                    })
 
-        # ... add other scan types here as needed
+                results = {
+                    "target": str(target),
+                    "status": "completed",
+                    "sites": sites
+                }
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error", 
+                    "sites": [],
+                    "error": f"Username search failed: {str(e)}"
+                }
+
+        # --- FULL NAME OSINT SCAN ---
+        elif target_type == "fullname" and scan_type == "clean":
+            try:
+                from scans.fullname import run as fullname_run
+                raw_results = fullname_run(target)
+                
+                # Clean the results
+                def clean_json(obj):
+                    if obj is None:
+                        return None
+                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                        return None
+                    elif isinstance(obj, dict):
+                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                    elif isinstance(obj, list):
+                        return [clean_json(item) for item in obj if item is not None]
+                    else:
+                        return obj
+                
+                results = clean_json(raw_results)
+                
+                # Ensure basic structure
+                if not isinstance(results, dict):
+                    results = {}
+                if 'sites' not in results:
+                    results['sites'] = []
+                if 'target' not in results:
+                    results['target'] = str(target)
+                if 'status' not in results:
+                    results['status'] = 'completed'
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error", 
+                    "sites": [],
+                    "error": f"Full name search failed: {str(e)}"
+                }
+
+        # --- EMAIL OSINT SCAN ---
+        elif target_type == "email" and scan_type == "clean":
+            try:
+                from scans.email import run as email_run
+                raw_results = email_run(target)
+                
+                # Clean the results
+                def clean_json(obj):
+                    if obj is None:
+                        return None
+                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                        return None
+                    elif isinstance(obj, dict):
+                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                    elif isinstance(obj, list):
+                        return [clean_json(item) for item in obj if item is not None]
+                    else:
+                        return obj
+                
+                results = clean_json(raw_results)
+                
+                # Ensure basic structure
+                if not isinstance(results, dict):
+                    results = {}
+                if 'sites' not in results:
+                    results['sites'] = []
+                if 'target' not in results:
+                    results['target'] = str(target)
+                if 'status' not in results:
+                    results['status'] = 'completed'
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "breaches": [],
+                    "social_profiles": [],
+                    "technical_info": {},
+                    "error": f"Email search failed: {str(e)}"
+                }
+
+        # --- PHONE NUMBER OSINT SCAN ---
+        elif target_type == "phone" and scan_type == "clean":
+            try:
+                from scans.phone import run as phone_run
+                raw_results = phone_run(target, country_code)
+                
+                # Clean the results
+                def clean_json(obj):
+                    if obj is None:
+                        return None
+                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                        return None
+                    elif isinstance(obj, dict):
+                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                    elif isinstance(obj, list):
+                        return [clean_json(item) for item in obj if item is not None]
+                    else:
+                        return obj
+                
+                results = clean_json(raw_results)
+                
+                # Ensure basic structure
+                if not isinstance(results, dict):
+                    results = {}
+                if 'sites' not in results:
+                    results['sites'] = []
+                if 'target' not in results:
+                    results['target'] = str(target)
+                if 'status' not in results:
+                    results['status'] = 'completed'
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "carrier_info": {},
+                    "location_info": {},
+                    "social_profiles": [],
+                    "breach_data": [],
+                    "technical_info": {},
+                    "threat_intel": [],
+                    "number_analysis": {},
+                    "error": f"Phone search failed: {str(e)}"
+                }
+
+        # --- DARK WEB SCAN (Username/Email) ---
+        elif target_type in ["username", "email"] and scan_type == "dark":
+            try:
+                from scans.darkuser import run as darkuser_run
+                raw_results = darkuser_run(target, target_type)
+                
+                # Clean the results
+                def clean_json(obj):
+                    if obj is None:
+                        return None
+                    elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                        return None
+                    elif isinstance(obj, dict):
+                        return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                    elif isinstance(obj, list):
+                        return [clean_json(item) for item in obj if item is not None]
+                    else:
+                        return obj
+                
+                results = clean_json(raw_results)
+                
+                # Ensure basic structure
+                if not isinstance(results, dict):
+                    results = {}
+                if 'sites' not in results:
+                    results['sites'] = []
+                if 'target' not in results:
+                    results['target'] = str(target)
+                if 'status' not in results:
+                    results['status'] = 'completed'
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "target_type": target_type,
+                    "status": "error",
+                    "darkweb_results": [],
+                    "leaks_found": [],
+                    "breach_data": [],
+                    "onion_service_results": {},
+                    "summary": {},
+                    "error": f"Dark web search failed: {str(e)}"
+                }
+
+        # --- ONION SCAN ---
+        elif target_type == "onion" and scan_type == "search":
+            try:
+                if search_onion_links:
+                    raw_results = search_onion_links(target)
+                    
+                    # Clean the results
+                    def clean_json(obj):
+                        if obj is None:
+                            return None
+                        elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                            return None
+                        elif isinstance(obj, dict):
+                            return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                        elif isinstance(obj, list):
+                            return [clean_json(item) for item in obj if item is not None]
+                        else:
+                            return obj
+                    
+                    results = clean_json(raw_results)
+                    
+                    # Ensure basic structure
+                    if not isinstance(results, dict):
+                        results = {}
+                    if 'sites' not in results:
+                        results['sites'] = []
+                    if 'target' not in results:
+                        results['target'] = str(target)
+                    if 'status' not in results:
+                        results['status'] = 'completed'
+                else:
+                    results = {
+                        "target": str(target),
+                        "status": "error",
+                        "sites": [],
+                        "error": "Onion search module not available"
+                    }
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "error": f"Onion search failed: {str(e)}"
+                }
+
+        # --- OTHER SCAN TYPES ---
+        else:
+            try:
+                module_name = f"scans.{scan_type}"
+                scan_module = importlib.import_module(module_name)
+                if hasattr(scan_module, "run"):
+                    raw_results = scan_module.run(target)
+                    
+                    # Clean the results
+                    def clean_json(obj):
+                        if obj is None:
+                            return None
+                        elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                            return None
+                        elif isinstance(obj, dict):
+                            return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                        elif isinstance(obj, list):
+                            return [clean_json(item) for item in obj if item is not None]
+                        else:
+                            return obj
+                    
+                    results = clean_json(raw_results)
+                    
+                    # Ensure basic structure
+                    if not isinstance(results, dict):
+                        results = {}
+                    if 'sites' not in results:
+                        results['sites'] = []
+                    if 'target' not in results:
+                        results['target'] = str(target)
+                    if 'status' not in results:
+                        results['status'] = 'completed'
+                        
+                else:
+                    results = {"error": f"No 'run' function found in {module_name}"}
+            except Exception as e:
+                results = {"error": str(e)}
 
         # Store results
-        # After storing results
         scan_id = store_scan_results(session["user"], target, target_type, scan_type, results)
         session['last_scan_id'] = scan_id
         cleanup_old_scans()
@@ -507,7 +768,6 @@ def scan():
             recent_scan=safe_results
         )
 
-
     except Exception as e:
         app.logger.error(f"Scan error: {str(e)}", exc_info=True)
         session.pop('csrf_token', None)  # Reset CSRF token to avoid serialization issues
@@ -521,7 +781,6 @@ def scan():
             scan_id=None,
             recent_scan=None
         )
-
 
 
 @app.route("/ask_ai", methods=["POST"])
