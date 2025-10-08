@@ -1024,3 +1024,227 @@ body {
     cursor: not-allowed;
     transform: none !important;
 }
+/* Team Section */
+.team-section {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    padding: 80px 20px;
+    margin: 60px 0 0 0;
+    border-top: 1px solid #e2e8f0;
+}
+
+.team-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.team-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #1e90ff, #0d6efd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.team-subtitle {
+    font-size: 1.2rem;
+    color: #64748b;
+    margin-bottom: 60px;
+    font-weight: 500;
+}
+
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+/* Team Member Cards */
+.team-member {
+    background: white;
+    padding: 30px 25px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    border: 1px solid #f1f5f9;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+}
+
+.team-member::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(135deg, #1e90ff, #0d6efd);
+}
+
+.team-member:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 60px rgba(30, 144, 255, 0.15);
+    border-color: #1e90ff;
+}
+
+/* Member Photo - Square/Rectangular */
+.member-photo {
+    width: 160px;
+    height: 160px;
+    margin: 0 auto 25px auto;
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.photo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: all 0.3s ease;
+}
+
+.photo-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(30, 144, 255, 0.9), rgba(13, 110, 253, 0.8));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.role-text {
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+    padding: 0 15px;
+}
+
+.team-member:hover .member-photo {
+    transform: scale(1.05);
+    box-shadow: 0 12px 35px rgba(30, 144, 255, 0.25);
+}
+
+.team-member:hover .photo-overlay {
+    opacity: 1;
+}
+
+.team-member:hover .photo-img {
+    transform: scale(1.1);
+}
+
+/* Member Info */
+.member-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 15px 0;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Social Links */
+.member-social {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.social-link {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    border: 2px solid #e2e8f0;
+}
+
+.social-link:hover {
+    background: linear-gradient(135deg, #1e90ff, #0d6efd);
+    transform: translateY(-2px);
+    border-color: #1e90ff;
+    box-shadow: 0 5px 15px rgba(30, 144, 255, 0.3);
+    color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .team-section {
+        padding: 60px 15px;
+    }
+    
+    .team-title {
+        font-size: 2rem;
+    }
+    
+    .team-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 30px;
+    }
+    
+    .team-member {
+        padding: 25px 20px;
+    }
+    
+    .member-photo {
+        width: 140px;
+        height: 140px;
+    }
+}
+
+@media (max-width: 480px) {
+    .team-grid {
+        grid-template-columns: 1fr;
+        max-width: 300px;
+    }
+    
+    .member-photo {
+        width: 120px;
+        height: 120px;
+    }
+}
+/* Terminal Actions */
+.terminal-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.download-btn {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.download-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+}

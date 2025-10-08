@@ -332,14 +332,17 @@
         <!-- Scan Results Container (Terminal Style) -->
         <div class="scan-results-container">
             <div class="terminal-header">
-                <span class="dot red"></span>
-                <span class="dot yellow"></span>
-                <span class="dot green"></span>
-                <span class="term-title">Scan Terminal</span>
-                {% if results %}
-                <a href="/report" class="report-btn">📊 View Full Report</a>
-                {% endif %}
-            </div>
+    <span class="dot red"></span>
+    <span class="dot yellow"></span>
+    <span class="dot green"></span>
+    <span class="term-title">Scan Terminal</span>
+    {% if results %}
+    <div class="terminal-actions">
+        <a href="/report" class="report-btn">📊 View Report</a>
+        <button onclick="downloadResults()" class="download-btn">📥 Download</button>
+    </div>
+    {% endif %}
+</div>
             <div class="terminal-body" id="scan-results">
                 {% if results %}
                     {% if results.status %}
@@ -760,6 +763,79 @@
             <p><strong>Remember:</strong> Your digital footprint can't be removed. Think before you share!</p>
         </div>
     </div>
+    <!-- Team Section -->
+<section class="team-section">
+    <div class="team-container">
+        <h2 class="team-title">Our Team</h2>
+        <p class="team-subtitle">The guys behind Osint Crowd</p>
+        
+        <div class="team-grid">
+            <!-- Team Member 1 -->
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="/static/images/team1.png" alt="Team Member 1" class="photo-img">
+                    <div class="photo-overlay">
+                        <span class="role-text">Site Maintenance & Deployment Manager</span>
+                    </div>
+                </div>
+                <h3 class="member-name">Bemnet Dawit</h3>
+                <div class="member-social">
+                    <a href="#" class="social-link">🌐</a>
+                    <a href="#" class="social-link">💼@mr_m1nt</a>
+                    <a href="#" class="social-link">📧bemnetdawitgebru5@gmail.com</a>
+                </div>
+            </div>
+
+            <!-- Team Member 2 -->
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="/static/images/team2.png" alt="Team Member 2" class="photo-img">
+                    <div class="photo-overlay">
+                        <span class="role-text">Web Platform Maintainer</span>
+                    </div>
+                </div>
+                <h3 class="member-name">Kebron Awet</h3>
+                <div class="member-social">
+                    <a href="#" class="social-link">🌐</a>
+                    <a href="#" class="social-link">💼@He_Hacks</a>
+                    <a href="#" class="social-link">📧kebronmemes01@gmail.com</a>
+                </div>
+            </div>
+
+            <!-- Team Member 3 -->
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="/static/images/team3.png" alt="Team Member 3" class="photo-img">
+                    <div class="photo-overlay">
+                        <span class="role-text">Naol Asrat</span>
+                    </div>
+                </div>
+                <h3 class="member-name">Resource Provider</h3>
+                <div class="member-social">
+                    <a href="#" class="social-link">🌐</a>
+                    <a href="#" class="social-link">💼@olano25</a>
+                    <a href="#" class="social-link">📧</a>
+                </div>
+            </div>
+
+            <!-- Team Member 4 -->
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="/static/images/team4.png" alt="Team Member 4" class="photo-img">
+                    <div class="photo-overlay">
+                        <span class="role-text">Code Contributer</span>
+                    </div>
+                </div>
+                <h3 class="member-name">Dawit Tefera</h3>
+                <div class="member-social">
+                    <a href="#" class="social-link">🌐</a>
+                    <a href="#" class="social-link">💼@D3F4ULT_3301</a>
+                    <a href="#" class="social-link">📧</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
     <!-- Footer -->
     <footer class="footer">
         <p>© 2025 CyberRecon — Created by Team Red Hunters | All Rights Reserved</p>
@@ -958,7 +1034,31 @@ window.addEventListener('pageshow', function() {
                 aiInput.placeholder = "Ask AI about the scan results...";
             }
         }
-        
+        // Simple Download Function
+function downloadResults() {
+    // Get all the text from scan results
+    const resultsElement = document.getElementById('scan-results');
+    const resultsText = resultsElement.innerText;
+    
+    // Get target name for filename
+    const target = '{{ target|default("scan") }}';
+    const timestamp = new Date().toLocaleString().replace(/[/:, ]/g, '-');
+    
+    // Create filename
+    const filename = `osint-scan-${target}-${timestamp}.txt`;
+    
+    // Create and download file
+    const blob = new Blob([resultsText], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+}
         // Check on page load
         checkScanResults();
     });
