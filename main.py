@@ -770,21 +770,21 @@ def scan():
 @login_required
 @rate_limit(max_requests=10, window_seconds=300)
 def ask_ai():
+    # Ensure content-type is application/json
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+
     try:
-        # Get JSON data
         data = request.get_json()
         if not data:
-            return jsonify({"error": "No data received"}), 400
+            return jsonify({"error": "No JSON data received"}), 400
             
         question = data.get("question", "").strip()
 
         if not question:
-            return jsonify({"error": "Question is required"}), 400
+            return jsonify({"error": "No question provided"}), 400
 
-        if len(question) > 1000:
-            return jsonify({"error": "Question too long"}), 400
-
-        # Get scan results
+        # Get scan results from database using scan ID
         if "last_scan_id" not in session:
             return jsonify({"error": "No scan results found. Run a scan first."}), 400
 
@@ -792,11 +792,13 @@ def ask_ai():
         if not scan_results:
             return jsonify({"error": "Scan results not found or expired."}), 400
 
-        # Prepare scan data for AI
         sites = scan_results.get("sites", [])
+
+        # Convert scan results into readable text for AI
         scan_text_lines = []
-        
         for site in sites:
+            # Fallback to empty dict if site is malformed
+            site = site or {}
             site_name = site.get("site", "Unknown Site")
             url = site.get("url", "")
             found = "Found" if site.get("found") else "Not Found"
@@ -804,54 +806,38 @@ def ask_ai():
 
         scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
 
-        # Include additional scan data if available
-        if scan_results.get('breaches'):
-            scan_text += f"\nBreaches found: {len(scan_results.get('breaches', []))}"
-        if scan_results.get('social_profiles'):
-            scan_text += f"\nSocial profiles: {len(scan_results.get('social_profiles', []))}"
-        if scan_results.get('summary'):
-            scan_text += f"\nSummary: {scan_results.get('summary')}"
-
         messages = [
-            {
-                "role": "system", 
-                "content": """You are a cybersecurity OSINT assistant. Provide concise, professional answers about scan results. 
-                Always include brief cybersecurity awareness tips about PII protection. Keep responses under 200 words.
-                Focus on the scan findings and practical security advice."""
-            },
-            {
-                "role": "user", 
-                "content": f"Scan Results:\n{scan_text}\n\nQuestion: {question}\n\nPlease provide a concise answer with relevant cybersecurity tips."
-            }
+            {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and short way and proffesional as possible and try to answer questions as much as you can."},
+            {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
         ]
 
-        # Check API key
-        if not OPENROUTER_API_KEY:
-            return jsonify({"error": "AI service not configured"}), 500
+        # Check if API key is configured
+        if not OPENROUTER_API_KEY or OPENROUTER_API_KEY == "your_openrouter_api_key_here":
+            return jsonify({"error": "OpenRouter API key not configured. Please add your API key to main.py"}), 400
 
-        # Call AI API
         completion = client.chat.completions.create(
-            model="deepseek/deepseek-chat-v3.1:free",
+            model="deepseek/deepseek-chat-v3.1:free",  # ✅ DeepSeek free model
             messages=messages,
-            max_tokens=300,
             extra_headers={
-                "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
-                "X-Title": "OsintCrowd Dashboard"
+                "HTTP-Referer": "https://your-domain.com",  # Change to your actual domain
+                "X-Title": "CyberRecon Dashboard"
             }
         )
 
+        # Access the message safely
         answer = completion.choices[0].message.content
         
-        # Store AI history (optional)
+        # Store AI history in database if needed, or keep minimal in session
         if "ai_history" not in session:
             session["ai_history"] = []
+        # Keep only last 5 questions to avoid session bloat
         session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
 
         return jsonify({"answer": answer})
 
     except Exception as e:
-        app.logger.error(f"AI request failed: {str(e)}", exc_info=True)
-        return jsonify({"error": "AI service temporarily unavailable. Please try again."}), 500
+        print(f"AI request failed: {str(e)}")
+        return jsonify({"error": f"AI service temporarily unavailable: {str(e)}"}), 500
 
 @app.route('/report')
 @login_required
