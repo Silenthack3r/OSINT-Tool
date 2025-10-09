@@ -123,7 +123,6 @@ app.logger.info(f"SECRET source={secret_source} secret_len={secret_len}")
 # Redis support removed; the app uses an in-memory rate limiter.
 redis_client = None
 
-
 # Security headers
 @app.after_request
 def set_security_headers(response):
@@ -132,7 +131,6 @@ def set_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
-
 
 # Expose csrf_token to templates so forms and JS can access it.
 # Must be registered at import/setup time (not during a request).
@@ -280,8 +278,6 @@ def store_scan_results(username, target, target_type, scan_type, results):
     conn.close()
     return scan_id
 
-
-
 # Background pruner for request_counts to prevent unbounded growth. Runs
 # every minute and removes entries older than the window (default 60s).
 def _start_request_counts_pruner(interval_seconds=60, window_seconds=60):
@@ -302,7 +298,6 @@ def _start_request_counts_pruner(interval_seconds=60, window_seconds=60):
 
     t = threading.Thread(target=pruner, daemon=True)
     t.start()
-
 
 # Start the pruner at import time
 _start_request_counts_pruner()
@@ -351,7 +346,6 @@ def login():
 
     return render_template("login.html")
 
-
 @app.before_request
 def _csrf_protect():
     # Only enforce CSRF for state-changing methods
@@ -378,9 +372,7 @@ def _csrf_protect():
             return None
         abort(400, 'Invalid CSRF token')
 
-
     # no-op for other methods
-
 
 @app.route('/_diag')
 def _diag():
@@ -414,7 +406,7 @@ def register():
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
             conn.commit()
-            s.close()
+            conn.close()  # FIXED: was s.close()
             # Generate CSRF token for the new session (user should login next)
             session['csrf_token'] = uuid.uuid4().hex
             flash("Registration successful! Please login.", "success")
@@ -444,8 +436,6 @@ def logout():
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
-
-
 
 @app.route("/scan", methods=['POST'])
 @login_required
@@ -572,42 +562,42 @@ def scan():
                 }
 
         # --- PHONE NUMBER OSINT SCAN ---
-elif target_type == "phone" and scan_type == "clean":
-    try:
-        print(f"[PHONE SCAN] Starting scan for: {target} with country: {country_code}")
-        
-        from scans.phone import run as phone_run
-        raw_results = phone_run(target, country_code)
-        
-        print(f"[PHONE SCAN] Raw results received: {raw_results.get('status')}")
-        
-        # Simple transformation - just pass through the main structure
-        results = {
-            "target": str(target),
-            "status": raw_results.get("status", "completed"),
-            "sites": raw_results.get("sites", []),
-            "carrier_info": raw_results.get("carrier_info", {}),
-            "location_info": raw_results.get("location_info", {}),
-            "social_profiles": raw_results.get("social_profiles", []),
-            "technical_info": raw_results.get("technical_info", {}),
-            "summary": raw_results.get("summary", {}),
-            "error": raw_results.get("error")
-        }
-        
-        print(f"[PHONE SCAN] Final results: {len(results['sites'])} sites")
-            
-    except Exception as e:
-        print(f"[PHONE SCAN] ERROR: {str(e)}")
-        results = {
-            "target": str(target),
-            "status": "error",
-            "sites": [],
-            "carrier_info": {},
-            "location_info": {},
-            "social_profiles": [],
-            "technical_info": {},
-            "error": f"Phone search failed: {str(e)}"
-        }
+        elif target_type == "phone" and scan_type == "clean":
+            try:
+                print(f"[PHONE SCAN] Starting scan for: {target} with country: {country_code}")
+                
+                from scans.phone import run as phone_run
+                raw_results = phone_run(target, country_code)
+                
+                print(f"[PHONE SCAN] Raw results received: {raw_results.get('status')}")
+                
+                # Simple transformation - just pass through the main structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": raw_results.get("sites", []),
+                    "carrier_info": raw_results.get("carrier_info", {}),
+                    "location_info": raw_results.get("location_info", {}),
+                    "social_profiles": raw_results.get("social_profiles", []),
+                    "technical_info": raw_results.get("technical_info", {}),
+                    "summary": raw_results.get("summary", {}),
+                    "error": raw_results.get("error")
+                }
+                
+                print(f"[PHONE SCAN] Final results: {len(results['sites'])} sites")
+                    
+            except Exception as e:
+                print(f"[PHONE SCAN] ERROR: {str(e)}")
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "carrier_info": {},
+                    "location_info": {},
+                    "social_profiles": [],
+                    "technical_info": {},
+                    "error": f"Phone search failed: {str(e)}"
+                }
 
         # --- DARK WEB SCAN (Username/Email) ---
         elif target_type in ["username", "email"] and scan_type == "dark":
@@ -774,25 +764,26 @@ elif target_type == "phone" and scan_type == "clean":
             scan_id=None,
             recent_scan=None
         )
+
 @app.route("/ask_ai", methods=["POST"])
 @login_required
 @rate_limit(max_requests=10, window_seconds=300)
 def ask_ai():
-    # Ensure content-type is application/json
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 400
-
     try:
+        # Get JSON data
         data = request.get_json()
         if not data:
-            return jsonify({"error": "No JSON data received"}), 400
+            return jsonify({"error": "No data received"}), 400
             
         question = data.get("question", "").strip()
 
-        if not question or len(question) > 1000:
-            return jsonify({"error": "Invalid question"}), 400
+        if not question:
+            return jsonify({"error": "Question is required"}), 400
 
-        # Get scan results from database using scan ID
+        if len(question) > 1000:
+            return jsonify({"error": "Question too long"}), 400
+
+        # Get scan results
         if "last_scan_id" not in session:
             return jsonify({"error": "No scan results found. Run a scan first."}), 400
 
@@ -800,13 +791,11 @@ def ask_ai():
         if not scan_results:
             return jsonify({"error": "Scan results not found or expired."}), 400
 
+        # Prepare scan data for AI
         sites = scan_results.get("sites", [])
-
-        # Convert scan results into readable text for AI
         scan_text_lines = []
+        
         for site in sites:
-            # Fallback to empty dict if site is malformed
-            site = site or {}
             site_name = site.get("site", "Unknown Site")
             url = site.get("url", "")
             found = "Found" if site.get("found") else "Not Found"
@@ -814,39 +803,54 @@ def ask_ai():
 
         scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
 
+        # Include additional scan data if available
+        if scan_results.get('breaches'):
+            scan_text += f"\nBreaches found: {len(scan_results.get('breaches', []))}"
+        if scan_results.get('social_profiles'):
+            scan_text += f"\nSocial profiles: {len(scan_results.get('social_profiles', []))}"
+        if scan_results.get('summary'):
+            scan_text += f"\nSummary: {scan_results.get('summary')}"
+
         messages = [
-            {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and in very very short way and proffesional as possible and also don forget to make the user aware about cybersecuirty and PII protectin."},
-            {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
+            {
+                "role": "system", 
+                "content": """You are a cybersecurity OSINT assistant. Provide concise, professional answers about scan results. 
+                Always include brief cybersecurity awareness tips about PII protection. Keep responses under 200 words.
+                Focus on the scan findings and practical security advice."""
+            },
+            {
+                "role": "user", 
+                "content": f"Scan Results:\n{scan_text}\n\nQuestion: {question}\n\nPlease provide a concise answer with relevant cybersecurity tips."
+            }
         ]
 
-        # Check if API key is available
+        # Check API key
         if not OPENROUTER_API_KEY:
             return jsonify({"error": "AI service not configured"}), 500
 
+        # Call AI API
         completion = client.chat.completions.create(
             model="deepseek/deepseek-chat-v3.1:free",
             messages=messages,
+            max_tokens=300,
             extra_headers={
                 "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
                 "X-Title": "OsintCrowd Dashboard"
             }
         )
 
-        # Access the message safely
         answer = completion.choices[0].message.content
         
-        # Store AI history in database if needed, or keep minimal in session
+        # Store AI history (optional)
         if "ai_history" not in session:
             session["ai_history"] = []
-        # Keep only last 5 questions to avoid session bloat
         session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
 
         return jsonify({"answer": answer})
 
     except Exception as e:
         app.logger.error(f"AI request failed: {str(e)}", exc_info=True)
-        return jsonify({"error": f"AI service error: {str(e)}"}), 500
-
+        return jsonify({"error": "AI service temporarily unavailable. Please try again."}), 500
 
 @app.route('/report')
 @login_required
@@ -867,11 +871,4 @@ def report():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-
     app.run(host="0.0.0.0", port=port)
-
-
-
-
-
-

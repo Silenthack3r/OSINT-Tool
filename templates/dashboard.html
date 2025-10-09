@@ -665,7 +665,71 @@
                 <button type="submit" {% if not results and not recent_scan %}disabled{% endif %}>Send</button>
             </form>
         </div>
+<script>
+document.getElementById("ai-form").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const question = document.getElementById("ai-input").value;
+    const responseBox = document.getElementById("ai-response");
 
+    if (!question.trim()) return;
+
+    // Show user message
+    const userMsg = document.createElement("div");
+    userMsg.classList.add("chat-message", "user");
+    userMsg.textContent = "You: " + question;
+    responseBox.appendChild(userMsg);
+
+    // Show AI thinking message
+    const aiMsg = document.createElement("div");
+    aiMsg.classList.add("chat-message", "ai");
+    aiMsg.textContent = "AI: Thinking...";
+    responseBox.appendChild(aiMsg);
+
+    // Auto scroll to bottom
+    responseBox.scrollTop = responseBox.scrollHeight;
+
+    // Clear waiting message if exists
+    const waitingMsg = responseBox.querySelector('.waiting');
+    if (waitingMsg) {
+        waitingMsg.remove();
+    }
+
+    try {
+        const res = await fetch("/ask_ai", {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json",
+                "X-CSRFToken": document.querySelector('input[name="csrf_token"]').value
+            },
+            body: JSON.stringify({ question: question })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || `Request failed`);
+        }
+
+        if (data.error) {
+            aiMsg.textContent = "AI: Error - " + data.error;
+            aiMsg.style.color = "#f44336";
+        } else {
+            aiMsg.textContent = "AI: " + data.answer;
+            aiMsg.style.color = "#4caf50";
+        }
+    } catch (err) {
+        console.error("AI request failed:", err);
+        aiMsg.textContent = "AI: Service temporarily unavailable. Please try again.";
+        aiMsg.style.color = "#f44336";
+    }
+
+    // Clear input
+    document.getElementById("ai-input").value = "";
+    
+    // Auto scroll to bottom
+    responseBox.scrollTop = responseBox.scrollHeight;
+});
+</script>
     </div>
  </div>
     <div class="pii-awareness-section">
