@@ -824,6 +824,7 @@ def ask_ai():
             }
         )
 
+
         # Access the message safely
         answer = completion.choices[0].message.content
         
