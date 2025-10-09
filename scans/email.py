@@ -43,8 +43,8 @@ class AdvancedEmailOSINT:
 
     def advanced_hudson_rock(self):
     """Hudson Rock analysis by scraping webpage for compromised computer data"""
-    try:
-        url = f"https://www.hudsonrock.com/search/email/{quote_plus(self.email)}"
+        try:
+         url = f"https://www.hudsonrock.com/search/email/{quote_plus(self.email)}"
         print(f"[Hudson Rock] Checking: {url}")
         
         response = requests.get(url, headers=headers, timeout=15)
