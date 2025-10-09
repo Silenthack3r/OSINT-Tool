@@ -397,7 +397,7 @@ def _diag():
     })
 
 @app.route("/register", methods=["GET", "POST"])
-@rate_limit(max_requests=3, window_seconds=300)
+@rate_limit(max_requests=10, window_seconds=300)
 def register():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -414,7 +414,7 @@ def register():
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
             conn.commit()
-            conn.close()
+            s.close()
             # Generate CSRF token for the new session (user should login next)
             session['csrf_token'] = uuid.uuid4().hex
             flash("Registration successful! Please login.", "success")
@@ -572,77 +572,42 @@ def scan():
                 }
 
         # --- PHONE NUMBER OSINT SCAN ---
-        elif target_type == "phone" and scan_type == "clean":
-            try:
-                from scans.phone import run as phone_run
-                raw_results = phone_run(target, country_code)
-                
-                # Transform the phone results to match the expected structure
-                results = {
-                    "target": str(target),
-                    "status": raw_results.get("status", "completed"),
-                    "sites": [],
-                    "carrier_info": {},
-                    "location_info": {},
-                    "social_profiles": [],
-                    "breach_data": [],
-                    "technical_info": {},
-                    "threat_intel": [],
-                    "number_analysis": {},
-                    "error": raw_results.get("error")
-                }
-                
-                # Convert phone-specific results to the standard sites format
-                if "sites" in raw_results:
-                    results["sites"] = raw_results["sites"]
-                    
-                # Add carrier info if available
-                if "carrier_info" in raw_results:
-                    results["carrier_info"] = raw_results["carrier_info"]
-                    
-                # Add location info if available
-                if "location_info" in raw_results:
-                    results["location_info"] = raw_results["location_info"]
-                    
-                # Add social profiles if available
-                if "social_profiles" in raw_results:
-                    results["social_profiles"] = raw_results["social_profiles"]
-                    
-                # Add breach data if available
-                if "breach_data" in raw_results:
-                    results["breach_data"] = raw_results["breach_data"]
-                    
-                # Add technical info if available
-                if "technical_info" in raw_results:
-                    results["technical_info"] = raw_results["technical_info"]
-                    
-                # Add threat intelligence if available
-                if "threat_intel" in raw_results:
-                    results["threat_intel"] = raw_results["threat_intel"]
-                    
-                # Add number analysis if available
-                if "number_analysis" in raw_results:
-                    results["number_analysis"] = raw_results["number_analysis"]
-                    
-                # Add summary information
-                if "summary" in raw_results:
-                    results["summary"] = raw_results["summary"]
-                    
-            except Exception as e:
-                app.logger.error(f"Phone scan error: {str(e)}", exc_info=True)
-                results = {
-                    "target": str(target),
-                    "status": "error",
-                    "sites": [],
-                    "carrier_info": {},
-                    "location_info": {},
-                    "social_profiles": [],
-                    "breach_data": [],
-                    "technical_info": {},
-                    "threat_intel": [],
-                    "number_analysis": {},
-                    "error": f"Phone search failed: {str(e)}"
-                }
+elif target_type == "phone" and scan_type == "clean":
+    try:
+        print(f"[PHONE SCAN] Starting scan for: {target} with country: {country_code}")
+        
+        from scans.phone import run as phone_run
+        raw_results = phone_run(target, country_code)
+        
+        print(f"[PHONE SCAN] Raw results received: {raw_results.get('status')}")
+        
+        # Simple transformation - just pass through the main structure
+        results = {
+            "target": str(target),
+            "status": raw_results.get("status", "completed"),
+            "sites": raw_results.get("sites", []),
+            "carrier_info": raw_results.get("carrier_info", {}),
+            "location_info": raw_results.get("location_info", {}),
+            "social_profiles": raw_results.get("social_profiles", []),
+            "technical_info": raw_results.get("technical_info", {}),
+            "summary": raw_results.get("summary", {}),
+            "error": raw_results.get("error")
+        }
+        
+        print(f"[PHONE SCAN] Final results: {len(results['sites'])} sites")
+            
+    except Exception as e:
+        print(f"[PHONE SCAN] ERROR: {str(e)}")
+        results = {
+            "target": str(target),
+            "status": "error",
+            "sites": [],
+            "carrier_info": {},
+            "location_info": {},
+            "social_profiles": [],
+            "technical_info": {},
+            "error": f"Phone search failed: {str(e)}"
+        }
 
         # --- DARK WEB SCAN (Username/Email) ---
         elif target_type in ["username", "email"] and scan_type == "dark":
@@ -809,7 +774,6 @@ def scan():
             scan_id=None,
             recent_scan=None
         )
-
 @app.route("/ask_ai", methods=["POST"])
 @login_required
 @rate_limit(max_requests=10, window_seconds=300)
@@ -818,40 +782,47 @@ def ask_ai():
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
 
-    data = request.get_json()
-    question = data.get("question", "").strip()
-
-    if not question or len(question) > 1000:
-        return jsonify({"error": "Invalid question"}), 400
-
-    # Get scan results from database using scan ID
-    if "last_scan_id" not in session:
-        return jsonify({"error": "No scan results found. Run a scan first."}), 400
-
-    scan_results = get_scan_results(session['last_scan_id'], session["user"])
-    if not scan_results:
-        return jsonify({"error": "Scan results not found or expired."}), 400
-
-    sites = scan_results.get("sites", [])
-
-    # Convert scan results into readable text for AI
-    scan_text_lines = []
-    for site in sites:
-        # Fallback to empty dict if site is malformed
-        site = site or {}
-        site_name = site.get("site", "Unknown Site")
-        url = site.get("url", "")
-        found = "Found" if site.get("found") else "Not Found"
-        scan_text_lines.append(f"{site_name}: {found} ({url})")
-
-    scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
-
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and in very very short way and proffesional as possible and also don forget to make the user aware about cybersecuirty and PII protectin."},
-        {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
-    ]
-
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data received"}), 400
+            
+        question = data.get("question", "").strip()
+
+        if not question or len(question) > 1000:
+            return jsonify({"error": "Invalid question"}), 400
+
+        # Get scan results from database using scan ID
+        if "last_scan_id" not in session:
+            return jsonify({"error": "No scan results found. Run a scan first."}), 400
+
+        scan_results = get_scan_results(session['last_scan_id'], session["user"])
+        if not scan_results:
+            return jsonify({"error": "Scan results not found or expired."}), 400
+
+        sites = scan_results.get("sites", [])
+
+        # Convert scan results into readable text for AI
+        scan_text_lines = []
+        for site in sites:
+            # Fallback to empty dict if site is malformed
+            site = site or {}
+            site_name = site.get("site", "Unknown Site")
+            url = site.get("url", "")
+            found = "Found" if site.get("found") else "Not Found"
+            scan_text_lines.append(f"{site_name}: {found} ({url})")
+
+        scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and in very very short way and proffesional as possible and also don forget to make the user aware about cybersecuirty and PII protectin."},
+            {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
+        ]
+
+        # Check if API key is available
+        if not OPENROUTER_API_KEY:
+            return jsonify({"error": "AI service not configured"}), 500
+
         completion = client.chat.completions.create(
             model="deepseek/deepseek-chat-v3.1:free",
             messages=messages,
@@ -863,6 +834,7 @@ def ask_ai():
 
         # Access the message safely
         answer = completion.choices[0].message.content
+        
         # Store AI history in database if needed, or keep minimal in session
         if "ai_history" not in session:
             session["ai_history"] = []
@@ -873,7 +845,7 @@ def ask_ai():
 
     except Exception as e:
         app.logger.error(f"AI request failed: {str(e)}", exc_info=True)
-        return jsonify({"error": "AI service unavailable"}), 500
+        return jsonify({"error": f"AI service error: {str(e)}"}), 500
 
 
 @app.route('/report')
