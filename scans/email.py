@@ -42,195 +42,195 @@ class AdvancedEmailOSINT:
         }
 
     def advanced_hudson_rock(self):
-    """Hudson Rock analysis by scraping webpage for compromised computer data"""
+        """Hudson Rock analysis by scraping webpage for compromised computer data"""
         try:
-         url = f"https://www.hudsonrock.com/search/email/{quote_plus(self.email)}"
-        print(f"[Hudson Rock] Checking: {url}")
-        
-        response = requests.get(url, headers=headers, timeout=15)
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            page_text = response.text
+            url = f"https://www.hudsonrock.com/search/email/{quote_plus(self.email)}"
+            print(f"[Hudson Rock] Checking: {url}")
             
-            # Extract computer names and compromise details
-            computer_data = self.extract_computer_data(page_text)
-            leak_data = self.extract_leak_data(page_text)
-            general_indicators = self.extract_general_indicators(page_text)
+            response = requests.get(url, headers=headers, timeout=15)
             
-            # Determine if we found anything
-            found_computers = len(computer_data) > 0
-            found_leaks = len(leak_data) > 0
-            found_indicators = len(general_indicators) > 0
-            
-            any_data_found = found_computers or found_leaks or found_indicators
-            
-            # Build details string
-            details_parts = []
-            if found_computers:
-                details_parts.append(f"{len(computer_data)} computers")
-            if found_leaks:
-                details_parts.append(f"{len(leak_data)} leak types")
-            if found_indicators:
-                details_parts.append("compromise indicators")
-            
-            details = " | ".join(details_parts) if details_parts else "No compromise data found"
-            
-            # Store technical info
-            if any_data_found:
-                self.results['technical_info']['hudson_rock'] = {
-                    'computers': computer_data,
-                    'leaks': leak_data,
-                    'general_indicators': general_indicators,
-                    'total_computers': len(computer_data),
-                    'total_leaks': len(leak_data)
-                }
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                page_text = response.text
                 
-                # Add to threat intelligence
-                if computer_data:
-                    self.results['threat_intel'].extend([
-                        f"Compromised: {comp.get('name', 'N/A')} ({comp.get('os', 'N/A')})"
-                        for comp in computer_data[:3]  # Limit to first 3
-                    ])
-            
-            self.results['sites'].append({
-                "site": "Hudson Rock",
-                "url": url,
-                "found": any_data_found,
-                "type": "compromise_data",
-                "details": details
-            })
-            
-            print(f"[Hudson Rock] Found: {details}")
-            
-        else:
-            self.results['sites'].append({
-                "site": "Hudson Rock",
-                "url": url,
-                "found": False,
-                "type": "compromise_data",
-                "details": f"HTTP Error {response.status_code}"
-            })
-            
-    except Exception as e:
-        print(f"[Hudson Rock] Error: {str(e)}")
-        self.results['sites'].append({
-            "site": "Hudson Rock",
-            "url": "",
-            "found": False,
-            "type": "compromise_data",
-            "details": f"Error: {str(e)}"
-        })
-
-def extract_computer_data(self, page_text):
-    """Extract computer names and details from page text"""
-    computers = []
-    
-    try:
-        # Pattern for computer names (common patterns in Hudson Rock)
-        computer_patterns = [
-            r'([A-Za-z0-9\-_]+PC)\b',           # SomethingPC
-            r'([A-Za-z0-9\-_]+LAPTOP)\b',       # SomethingLAPTOP  
-            r'([A-Za-z0-9\-_]+DESKTOP)\b',      # SomethingDESKTOP
-            r'([A-Za-z0-9\-_]+WORKSTATION)\b',  # SomethingWORKSTATION
-            r'([A-Za-z0-9\-_]+NOTEBOOK)\b',     # SomethingNOTEBOOK
-            r'(\bDESKTOP-[A-Z0-9]+\b)',         # DESKTOP-ABC123
-            r'(\bLAPTOP-[A-Z0-9]+\b)',          # LAPTOP-ABC123
-            r'(\bWIN-[A-Z0-9]+\b)',             # WIN-ABC123
-        ]
-        
-        # Extract computer names
-        computer_names = []
-        for pattern in computer_patterns:
-            matches = re.findall(pattern, page_text, re.IGNORECASE)
-            computer_names.extend(matches)
-        
-        # Remove duplicates and filter
-        computer_names = list(set([name for name in computer_names if len(name) > 3]))
-        
-        # Extract OS information
-        os_patterns = {
-            'Windows': r'Windows\s*(?:10|11|8|7|XP|Vista)?',
-            'Linux': r'Linux|Ubuntu|Debian|CentOS',
-            'macOS': r'macOS|Mac\s*OS|Darwin'
-        }
-        
-        # Extract IP addresses
-        ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
-        ip_addresses = re.findall(ip_pattern, page_text)
-        
-        # Build computer objects
-        for name in computer_names[:10]:  # Limit to first 10
-            computer = {'name': name, 'os': 'N/A', 'ip': 'N/A'}
-            
-            # Try to find OS
-            for os_name, os_pattern in os_patterns.items():
-                if re.search(os_pattern, page_text, re.IGNORECASE):
-                    computer['os'] = os_name
-                    break
-            
-            # Try to associate with IP (simple heuristic)
-            if ip_addresses:
-                computer['ip'] = ip_addresses[0]  # Just take first IP for now
-            
-            computers.append(computer)
-            
-    except Exception as e:
-        print(f"[Hudson Rock] Computer extraction error: {e}")
-    
-    return computers
-
-def extract_leak_data(self, page_text):
-    """Extract leak and breach information"""
-    leaks = []
-    
-    try:
-        # Look for leak indicators
-        leak_indicators = {
-            'credentials': ['password', 'credential', 'login', 'hash'],
-            'browser_data': ['browser', 'cookie', 'autofill', 'bookmark'],
-            'system_info': ['system', 'hardware', 'specification', 'configuration'],
-            'financial': ['credit card', 'bank', 'crypto', 'wallet'],
-            'personal_data': ['personal', 'identity', 'document', 'scan']
-        }
-        
-        page_lower = page_text.lower()
-        
-        for leak_type, keywords in leak_indicators.items():
-            found_keywords = [kw for kw in keywords if kw in page_lower]
-            if found_keywords:
-                leaks.append({
-                    'type': leak_type,
-                    'indicators': found_keywords[:3],  # Limit to first 3 indicators
-                    'count': len(found_keywords)
+                # Extract computer names and compromise details
+                computer_data = self.extract_computer_data(page_text)
+                leak_data = self.extract_leak_data(page_text)
+                general_indicators = self.extract_general_indicators(page_text)
+                
+                # Determine if we found anything
+                found_computers = len(computer_data) > 0
+                found_leaks = len(leak_data) > 0
+                found_indicators = len(general_indicators) > 0
+                
+                any_data_found = found_computers or found_leaks or found_indicators
+                
+                # Build details string
+                details_parts = []
+                if found_computers:
+                    details_parts.append(f"{len(computer_data)} computers")
+                if found_leaks:
+                    details_parts.append(f"{len(leak_data)} leak types")
+                if found_indicators:
+                    details_parts.append("compromise indicators")
+                
+                details = " | ".join(details_parts) if details_parts else "No compromise data found"
+                
+                # Store technical info
+                if any_data_found:
+                    self.results['technical_info']['hudson_rock'] = {
+                        'computers': computer_data,
+                        'leaks': leak_data,
+                        'general_indicators': general_indicators,
+                        'total_computers': len(computer_data),
+                        'total_leaks': len(leak_data)
+                    }
+                    
+                    # Add to threat intelligence
+                    if computer_data:
+                        self.results['threat_intel'].extend([
+                            f"Compromised: {comp.get('name', 'N/A')} ({comp.get('os', 'N/A')})"
+                            for comp in computer_data[:3]  # Limit to first 3
+                        ])
+                
+                self.results['sites'].append({
+                    "site": "Hudson Rock",
+                    "url": url,
+                    "found": any_data_found,
+                    "type": "compromise_data",
+                    "details": details
                 })
                 
-    except Exception as e:
-        print(f"[Hudson Rock] Leak extraction error: {e}")
-    
-    return leaks
-
-def extract_general_indicators(self, page_text):
-    """Extract general compromise indicators"""
-    indicators = []
-    
-    try:
-        page_lower = page_text.lower()
-        
-        compromise_terms = [
-            'compromised', 'infected', 'malware', 'ransomware', 'trojan',
-            'keylogger', 'stealer', 'breached', 'hacked', 'exploited',
-            'data leak', 'information steal', 'credential theft'
-        ]
-        
-        for term in compromise_terms:
-            if term in page_lower:
-                indicators.append(term)
+                print(f"[Hudson Rock] Found: {details}")
                 
-    except Exception as e:
-        print(f"[Hudson Rock] Indicator extraction error: {e}")
-    
-    return indicators
+            else:
+                self.results['sites'].append({
+                    "site": "Hudson Rock",
+                    "url": url,
+                    "found": False,
+                    "type": "compromise_data",
+                    "details": f"HTTP Error {response.status_code}"
+                })
+                
+        except Exception as e:
+            print(f"[Hudson Rock] Error: {str(e)}")
+            self.results['sites'].append({
+                "site": "Hudson Rock",
+                "url": "",
+                "found": False,
+                "type": "compromise_data",
+                "details": f"Error: {str(e)}"
+            })
+
+    def extract_computer_data(self, page_text):
+        """Extract computer names and details from page text"""
+        computers = []
+        
+        try:
+            # Pattern for computer names (common patterns in Hudson Rock)
+            computer_patterns = [
+                r'([A-Za-z0-9\-_]+PC)\b',           # SomethingPC
+                r'([A-Za-z0-9\-_]+LAPTOP)\b',       # SomethingLAPTOP  
+                r'([A-Za-z0-9\-_]+DESKTOP)\b',      # SomethingDESKTOP
+                r'([A-Za-z0-9\-_]+WORKSTATION)\b',  # SomethingWORKSTATION
+                r'([A-Za-z0-9\-_]+NOTEBOOK)\b',     # SomethingNOTEBOOK
+                r'(\bDESKTOP-[A-Z0-9]+\b)',         # DESKTOP-ABC123
+                r'(\bLAPTOP-[A-Z0-9]+\b)',          # LAPTOP-ABC123
+                r'(\bWIN-[A-Z0-9]+\b)',             # WIN-ABC123
+            ]
+            
+            # Extract computer names
+            computer_names = []
+            for pattern in computer_patterns:
+                matches = re.findall(pattern, page_text, re.IGNORECASE)
+                computer_names.extend(matches)
+            
+            # Remove duplicates and filter
+            computer_names = list(set([name for name in computer_names if len(name) > 3]))
+            
+            # Extract OS information
+            os_patterns = {
+                'Windows': r'Windows\s*(?:10|11|8|7|XP|Vista)?',
+                'Linux': r'Linux|Ubuntu|Debian|CentOS',
+                'macOS': r'macOS|Mac\s*OS|Darwin'
+            }
+            
+            # Extract IP addresses
+            ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+            ip_addresses = re.findall(ip_pattern, page_text)
+            
+            # Build computer objects
+            for name in computer_names[:10]:  # Limit to first 10
+                computer = {'name': name, 'os': 'N/A', 'ip': 'N/A'}
+                
+                # Try to find OS
+                for os_name, os_pattern in os_patterns.items():
+                    if re.search(os_pattern, page_text, re.IGNORECASE):
+                        computer['os'] = os_name
+                        break
+                
+                # Try to associate with IP (simple heuristic)
+                if ip_addresses:
+                    computer['ip'] = ip_addresses[0]  # Just take first IP for now
+                
+                computers.append(computer)
+                
+        except Exception as e:
+            print(f"[Hudson Rock] Computer extraction error: {e}")
+        
+        return computers
+
+    def extract_leak_data(self, page_text):
+        """Extract leak and breach information"""
+        leaks = []
+        
+        try:
+            # Look for leak indicators
+            leak_indicators = {
+                'credentials': ['password', 'credential', 'login', 'hash'],
+                'browser_data': ['browser', 'cookie', 'autofill', 'bookmark'],
+                'system_info': ['system', 'hardware', 'specification', 'configuration'],
+                'financial': ['credit card', 'bank', 'crypto', 'wallet'],
+                'personal_data': ['personal', 'identity', 'document', 'scan']
+            }
+            
+            page_lower = page_text.lower()
+            
+            for leak_type, keywords in leak_indicators.items():
+                found_keywords = [kw for kw in keywords if kw in page_lower]
+                if found_keywords:
+                    leaks.append({
+                        'type': leak_type,
+                        'indicators': found_keywords[:3],  # Limit to first 3 indicators
+                        'count': len(found_keywords)
+                    })
+                    
+        except Exception as e:
+            print(f"[Hudson Rock] Leak extraction error: {e}")
+        
+        return leaks
+
+    def extract_general_indicators(self, page_text):
+        """Extract general compromise indicators"""
+        indicators = []
+        
+        try:
+            page_lower = page_text.lower()
+            
+            compromise_terms = [
+                'compromised', 'infected', 'malware', 'ransomware', 'trojan',
+                'keylogger', 'stealer', 'breached', 'hacked', 'exploited',
+                'data leak', 'information steal', 'credential theft'
+            ]
+            
+            for term in compromise_terms:
+                if term in page_lower:
+                    indicators.append(term)
+                    
+        except Exception as e:
+            print(f"[Hudson Rock] Indicator extraction error: {e}")
+        
+        return indicators
 
     def breach_directory_search(self):
         """Search multiple breach databases"""
