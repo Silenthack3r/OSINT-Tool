@@ -93,7 +93,7 @@ def check_site(username, sitename, info):
                 response = requests.get(
                     url, 
                     headers=HEADERS, 
-                    timeout=10, 
+                    timeout=4, 
                     allow_redirects=True
                 )
 
@@ -163,7 +163,7 @@ def run(username):
     
     results = []
     try:
-        with ThreadPoolExecutor(max_workers=15) as executor:  # Conservative thread count
+        with ThreadPoolExecutor(max_workers=60) as executor:  # Conservative thread count
             futures = []
             for sitename, info in DATA.items():
                 if "url" not in info:

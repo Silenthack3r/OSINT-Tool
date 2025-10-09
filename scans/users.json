@@ -44,20 +44,10 @@
     "url": "https://tiktok.com/@{}",
     "urlMain": "https://tiktok.com/"
   },
-  "Twitch": {
-    "errorType": "status_code",
-    "url": "https://twitch.tv/{}",
-    "urlMain": "https://twitch.tv/"
-  },
   "Discord": {
     "errorType": "message",
     "url": "https://discord.com",
     "urlProbe": "https://discord.com/api/v9/unique-username/username-attempt-unauthed"
-  },
-  "Spotify": {
-    "errorType": "status_code",
-    "url": "https://open.spotify.com/user/{}",
-    "urlMain": "https://open.spotify.com/"
   },
   "Snapchat": {
     "errorType": "status_code",
@@ -279,12 +269,7 @@
     "url": "https://kik.me/{}",
     "urlMain": "http://kik.me/"
   },
-    "Mixcloud": {
-    "errorType": "status_code",
-    "url": "https://www.mixcloud.com/{}/",
-    "urlMain": "https://www.mixcloud.com/"
-  },
-  "MySpace": {
+     "MySpace": {
     "errorType": "status_code",
     "url": "https://myspace.com/{}",
     "urlMain": "https://myspace.com/"
@@ -294,12 +279,7 @@
     "url": "https://pastebin.com/u/{}",
     "urlMain": "https://pastebin.com/"
   },
-  "PayPal": {
-    "errorType": "status_code",
-    "url": "https://paypal.me/{}",
-    "urlMain": "https://paypal.me/"
-  },
-  "ProductHunt": {
+    "ProductHunt": {
     "errorType": "status_code",
     "url": "https://www.producthunt.com/@{}",
     "urlMain": "https://www.producthunt.com/"
@@ -364,19 +344,9 @@
     "url": "https://www.wattpad.com/user/{}",
     "urlMain": "https://www.wattpad.com/"
   },
-  "We Heart It": {
-    "errorType": "status_code",
-    "url": "https://weheartit.com/{}",
-    "urlMain": "https://weheartit.com/"
-  },
-  "WordPress": {
+    "WordPress": {
     "errorType": "response_url",
     "url": "https://{}.wordpress.com/",
     "urlMain": "https://wordpress.com"
-  },
-  "Yelp": {
-    "errorType": "status_code",
-    "url": "https://www.yelp.com/user_details?userid={}",
-    "urlMain": "https://www.yelp.com/"
   }
-}
+  }

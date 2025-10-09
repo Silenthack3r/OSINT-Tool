@@ -1,322 +1,140 @@
 import requests
-import json
 import re
-import time
 import phonenumbers
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote_plus
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
-
-
-def _get_snippet(text, max_full=20000, head_tail=10000):
-    """Return a lowercase snippet for fast substring checks.
-    For very large bodies, only keep the first+last slices to avoid scanning
-    the entire HTML document.
-    """
-    if not text:
-        return ""
-    try:
-        if len(text) > max_full:
-            return (text[:head_tail] + text[-head_tail:]).lower()
-        return text.lower()
-    except Exception:
-        return text.lower() if text else ""
-
-
-def _contains_any(text, patterns):
-    s = _get_snippet(text)
-    for p in patterns:
-        if not p:
-            continue
-        if p.lower() in s:
-            return True
-    return False
-
-
-def _is_generic_redirect(orig_url, final_url, invalid_redirects=None):
-    try:
-        orig = urlparse(orig_url)
-        final = urlparse(final_url)
-        if orig.netloc == final.netloc:
-            path = (final.path or "/").lower()
-            if path in ["/", ""] or any(p in path for p in ["login", "signin", "signup", "dashboard"]):
-                return True
-        if invalid_redirects:
-            for pat in invalid_redirects:
-                if pat in final.geturl():
-                    return True
-    except Exception:
-        return False
-    return False
 
 # Configuration
-REQUEST_TIMEOUT = 20
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-headers = {
-    'User-Agent': USER_AGENT,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
+REQUEST_TIMEOUT = 8
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 }
 
-class AdvancedPhoneOSINT:
+class SimplePhoneOSINT:
     def __init__(self, phone_number, country_code="+1"):
+        self.phone = self.clean_phone(phone_number, country_code)
         self.country_code = country_code
-        self.original_phone = phone_number
-        self.phone = self.clean_and_format_phone(phone_number, country_code)
-        self.international_phone = self.format_international()
         
         self.results = {
-            "target": self.international_phone,
+            "target": self.phone,
             "status": "completed", 
             "sites": [],
             "carrier_info": {},
             "location_info": {},
             "social_profiles": [],
-            "breach_data": [],
             "technical_info": {},
-            "threat_intel": [],
-            "number_analysis": {}
+            "summary": {}
         }
 
-    def clean_and_format_phone(self, phone, country_code):
-        """Clean phone number and apply country code formatting"""
-        try:
-            # Remove all non-digit characters
-            cleaned = re.sub(r'\D', '', phone)
+    def clean_phone(self, phone, country_code):
+        """Simple phone cleaning"""
+        # Remove all non-digit characters
+        cleaned = re.sub(r'\D', '', str(phone))
+        country_digits = str(country_code).replace('+', '')
+        
+        # Add country code if not present
+        if not cleaned.startswith(country_digits):
+            cleaned = country_digits + cleaned
             
-            # Remove leading zero if present (common in local formats)
-            if cleaned.startswith('0'):
-                cleaned = cleaned[1:]
-            
-            # Apply country code
-            country_digits = country_code.replace('+', '')
-            if not cleaned.startswith(country_digits):
-                cleaned = country_digits + cleaned
-                
-            return cleaned
-        except Exception as e:
-            print(f"Error cleaning phone: {e}")
-            return phone
+        return cleaned
 
-    def format_international(self):
-        """Format phone number in international format"""
+    def basic_phone_analysis(self):
+        """Basic phone number analysis using phonenumbers library"""
         try:
-            # Use phonenumbers library for proper formatting
-            parsed = phonenumbers.parse(f"+{self.phone}", None)
-            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
-        except:
-            return f"+{self.phone}"
-
-    def truecaller_advanced(self):
-        """Advanced Truecaller lookup"""
-        try:
-            url = f"https://www.truecaller.com/search/in/{quote_plus(self.international_phone.replace(' ', ''))}"
-            response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            formatted_number = f"+{self.phone}"
+            parsed = phonenumbers.parse(formatted_number, None)
             
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Extract comprehensive information
-                extracted_data = {}
-                
-                # Name extraction
-                name_patterns = [
-                    r'"name":"([^"]+)"',
-                    r'<title>([^<]+)</title>',
-                    r'profile-name[^>]*>([^<]+)<',
-                    r'Truecaller.*?([A-Za-z\s]+)'
-                ]
-                
-                for pattern in name_patterns:
-                    matches = re.findall(pattern, response.text)
-                    if matches and len(matches[0]) > 2:
-                        extracted_data['name'] = matches[0]
-                        break
-                
-                # Location extraction
-                location_patterns = [
-                    r'"location":"([^"]+)"',
-                    r'location[^>]*>([^<]+)<',
-                    r'address[^>]*>([^<]+)<'
-                ]
-                
-                for pattern in location_patterns:
-                    matches = re.findall(pattern, response.text)
-                    if matches:
-                        extracted_data['location'] = matches[0]
-                        break
-                
-                # Spam score detection
-                spam_indicators = ['spam', 'reported', 'fraud', 'scam']
-                spam_score = sum(1 for indicator in spam_indicators if indicator in response.text.lower())
-                
-                if extracted_data:
-                    details = []
-                    if 'name' in extracted_data:
-                        details.append(f"Name: {extracted_data['name']}")
-                    if 'location' in extracted_data:
-                        details.append(f"Location: {extracted_data['location']}")
-                    if spam_score > 0:
-                        details.append(f"Spam indicators: {spam_score}")
-                    
-                    self.results['sites'].append({
-                        "site": "Truecaller",
-                        "url": url,
-                        "found": True,
-                        "type": "reverse_lookup",
-                        "details": " | ".join(details)
-                    })
-                    
-                    # Update results
-                    if 'name' in extracted_data:
-                        self.results['number_analysis']['name'] = extracted_data['name']
-                    if 'location' in extracted_data:
-                        self.results['location_info']['truecaller'] = extracted_data['location']
-                    if spam_score > 0:
-                        self.results['threat_intel'].append(f"Truecaller spam indicators: {spam_score}")
-                else:
-                    self.results['sites'].append({
-                        "site": "Truecaller", 
-                        "url": url,
-                        "found": False,
-                        "type": "reverse_lookup",
-                        "details": "No public information"
-                    })
-                    
+            # Basic validation
+            is_valid = phonenumbers.is_valid_number(parsed)
+            number_type = phonenumbers.number_type(parsed) if is_valid else "UNKNOWN"
+            location = phonenumbers.geocoder.description_for_number(parsed, "en") if is_valid else "Unknown"
+            
+            self.results['technical_info'] = {
+                'is_valid': is_valid,
+                'number_type': str(number_type),
+                'location': location,
+                'international_format': phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL),
+                'country_code': parsed.country_code
+            }
+            
+            self.results['sites'].append({
+                "site": "Phone Number Analysis",
+                "url": "",
+                "found": True,
+                "type": "technical",
+                "details": f"Valid: {is_valid}, Type: {number_type}, Location: {location}"
+            })
+            
         except Exception as e:
             self.results['sites'].append({
-                "site": "Truecaller",
+                "site": "Phone Number Analysis",
                 "url": "",
                 "found": False,
-                "type": "reverse_lookup", 
+                "type": "technical", 
                 "details": f"Error: {str(e)}"
             })
 
-    def numspy_search(self):
-        """Numspy phone lookup"""
-        try:
-            url = f"https://numspy.io/{quote_plus(self.international_phone.replace(' ', ''))}"
-            response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-            
-            if response.status_code == 200:
-                if not _contains_any(response.text, ["not found", "error"]):
-                    # Extract information from Numspy
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    
-                    info_indicators = ['carrier', 'location', 'type', 'timezone']
-                    found_info = []
-                    
-                    for indicator in info_indicators:
-                        if indicator in response.text.lower():
-                            found_info.append(indicator)
-                    
-                    self.results['sites'].append({
-                        "site": "Numspy",
+    def check_social_media(self):
+        """Check basic social media platforms"""
+        social_platforms = [
+            ("WhatsApp", f"https://wa.me/{self.phone}", "messaging"),
+            ("Telegram", f"https://t.me/{self.phone}", "messaging"),
+        ]
+        
+        def check_platform(name, url, ptype):
+            try:
+                response = requests.head(url, headers=HEADERS, timeout=5, allow_redirects=True)
+                if response.status_code in [200, 301, 302]:
+                    return {
+                        "site": name,
                         "url": url,
                         "found": True,
-                        "type": "lookup",
-                        "details": f"Data points: {', '.join(found_info)}" if found_info else "Information available"
+                        "type": ptype,
+                        "details": "Profile may exist"
+                    }
+            except:
+                pass
+            return None
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [executor.submit(check_platform, name, url, ptype) for name, url, ptype in social_platforms]
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    self.results['sites'].append(result)
+                    self.results['social_profiles'].append({
+                        "platform": result['site'],
+                        "url": result['url'],
+                        "type": result['type']
                     })
-                else:
-                    self.results['sites'].append({
-                        "site": "Numspy",
-                        "url": url,
-                        "found": False,
-                        "type": "lookup", 
-                        "details": "No information found"
-                    })
-                    
-        except Exception as e:
-            self.results['sites'].append({
-                "site": "Numspy",
-                "url": "",
-                "found": False,
-                "type": "lookup",
-                "details": f"Error: {str(e)}"
-            })
 
-    def opencnam_lookup(self):
-        """OpenCNAM caller ID lookup"""
+    def check_carrier_info(self):
+        """Simple carrier lookup"""
         try:
-            url = f"https://api.opencnam.com/v3/phone/{quote_plus(self.phone)}?format=json"
-            response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            # Use a simple API or lookup
+            url = f"https://freecarrierlookup.com/?phone={self.phone}"
+            response = requests.get(url, headers=HEADERS, timeout=10)
             
             if response.status_code == 200:
-                data = response.json()
-                if data.get('name') and data['name'] != 'Unknown':
-                    self.results['sites'].append({
-                        "site": "OpenCNAM",
-                        "url": f"https://opencnam.com/phone/{self.phone}",
-                        "found": True,
-                        "type": "caller_id",
-                        "details": f"Caller ID: {data.get('name')}"
-                    })
-                    
-                    self.results['number_analysis']['opencnam_name'] = data.get('name')
-                else:
-                    self.results['sites'].append({
-                        "site": "OpenCNAM",
-                        "url": f"https://opencnam.com/phone/{self.phone}",
-                        "found": False,
-                        "type": "caller_id",
-                        "details": "No caller ID information"
-                    })
-                    
-        except Exception as e:
-            self.results['sites'].append({
-                "site": "OpenCNAM",
-                "url": "",
-                "found": False,
-                "type": "caller_id",
-                "details": f"Error: {str(e)}"
-            })
-
-    def freecarrierlookup_advanced(self):
-        """Advanced carrier lookup"""
-        try:
-            url = f"https://freecarrierlookup.com/?phone={quote_plus(self.phone)}"
-            response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-            
-            if response.status_code == 200:
-                # Enhanced carrier information extraction
-                carrier_patterns = [
-                    r'Carrier[^>]*>([^<]+)<',
-                    r'Provider[^>]*>([^<]+)<',
-                    r'carrier[^>]*>([^<]+)<',
-                    r'Service Provider[^>]*>([^<]+)<'
-                ]
-                
-                carrier = None
-                for pattern in carrier_patterns:
-                    matches = re.findall(pattern, response.text, re.IGNORECASE)
-                    if matches:
-                        carrier = matches[0].strip()
-                        break
-                
-                if carrier:
+                # Simple check for carrier info
+                if 'carrier' in response.text.lower() or 'operator' in response.text.lower():
                     self.results['sites'].append({
                         "site": "FreeCarrierLookup",
                         "url": url,
                         "found": True,
                         "type": "carrier",
-                        "details": f"Carrier: {carrier}"
+                        "details": "Carrier information available"
                     })
-                    
-                    self.results['carrier_info']['primary'] = carrier
-                    self.results['technical_info']['carrier'] = carrier
+                    self.results['carrier_info'] = {'source': 'FreeCarrierLookup'}
                 else:
                     self.results['sites'].append({
                         "site": "FreeCarrierLookup",
                         "url": url,
                         "found": False,
                         "type": "carrier",
-                        "details": "No carrier information"
+                        "details": "No carrier information found"
                     })
-                    
         except Exception as e:
             self.results['sites'].append({
                 "site": "FreeCarrierLookup",
@@ -326,281 +144,44 @@ class AdvancedPhoneOSINT:
                 "details": f"Error: {str(e)}"
             })
 
-    def phonevalidator_advanced(self):
-        """Advanced phone validation"""
-        try:
-            url = f"https://www.phonevalidator.com/result?phone={quote_plus(self.phone)}"
-            response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-            
-            if response.status_code == 200:
-                # Comprehensive validation data extraction
-                validation_data = {}
-                
-                validation_patterns = {
-                    'valid': r'Valid[^>]*>([^<]+)<',
-                    'carrier': r'Carrier[^>]*>([^<]+)<',
-                    'location': r'Location[^>]*>([^<]+)<',
-                    'line_type': r'Line Type[^>]*>([^<]+)<'
-                }
-                
-                for key, pattern in validation_patterns.items():
-                    matches = re.findall(pattern, response.text, re.IGNORECASE)
-                    if matches:
-                        validation_data[key] = matches[0].strip()
-                
-                if validation_data:
-                    details = [f"{k}: {v}" for k, v in validation_data.items()]
-                    self.results['sites'].append({
-                        "site": "PhoneValidator",
-                        "url": url,
-                        "found": True,
-                        "type": "validation",
-                        "details": " | ".join(details)
-                    })
-                    
-                    # Update technical info
-                    self.results['technical_info']['validation'] = validation_data
-                else:
-                    self.results['sites'].append({
-                        "site": "PhoneValidator",
-                        "url": url,
-                        "found": False,
-                        "type": "validation",
-                        "details": "No validation data"
-                    })
-                    
-        except Exception as e:
-            self.results['sites'].append({
-                "site": "PhoneValidator",
-                "url": "",
-                "found": False,
-                "type": "validation",
-                "details": f"Error: {str(e)}"
-            })
-
-    def social_media_deep_search(self):
-        """Deep social media profile discovery"""
-        social_platforms = [
-            # Messaging apps
-            ("Telegram", f"https://t.me/+{self.phone}", "messaging", True),
-            ("WhatsApp", f"https://wa.me/{self.phone}", "messaging", True),
-            ("Signal", f"https://signal.me/#p/+{self.phone}", "messaging", False),
-            ("Viber", f"viber://add?number={self.phone}", "messaging", False),
-            
-            # Social networks
-            ("Facebook", f"https://www.facebook.com/login/identify?ctx=recover&phone={quote_plus(self.international_phone)}", "social", True),
-            ("Instagram", f"https://www.instagram.com/accounts/account_recovery/?phone={quote_plus(self.international_phone)}", "social", True),
-            ("Twitter", f"https://twitter.com/search?q={quote_plus(self.international_phone)}&src=typed_query", "social", True),
-            ("LinkedIn", f"https://www.linkedin.com/pub/dir/?phone={quote_plus(self.international_phone)}", "professional", True),
-            
-            # Additional platforms
-            ("Snapchat", f"https://accounts.snapchat.com/accounts/v2/login", "social", False),
-            ("Discord", f"https://discord.com/login", "social", False),
+    def run_scan(self):
+        """Run all phone OSINT checks"""
+        print(f"[+] Starting phone OSINT for: {self.phone}")
+        
+        methods = [
+            self.basic_phone_analysis,
+            self.check_social_media,
+            self.check_carrier_info,
         ]
         
-        def check_social_platform(platform_name, url, platform_type, do_http_check):
+        # Run methods sequentially to avoid overwhelming
+        for method in methods:
             try:
-                if not do_http_check:
-                    return {
-                        "site": platform_name,
-                        "url": url,
-                        "found": True,
-                        "type": platform_type,
-                        "details": "App link available"
-                    }
-                
-                response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-                if response.status_code == 200:
-                    # Redirect heuristic
-                    if _is_generic_redirect(url, response.url):
-                        return None
-
-                    # Advanced pattern matching for account existence (use snippet)
-                    positive_indicators = [
-                        'account', 'profile', 'user', 'found', 'exists', 'recover',
-                        'log in', 'sign in', 'phone number'
-                    ]
-                    
-                    negative_indicators = [
-                        'not found', 'no account', 'invalid', 'error'
-                    ]
-                    
-                    snippet = _get_snippet(response.text)
-                    positive_score = sum(1 for ind in positive_indicators if ind in snippet)
-                    negative_score = sum(1 for ind in negative_indicators if ind in snippet)
-                    
-                    if positive_score > negative_score:
-                        return {
-                            "site": platform_name,
-                            "url": url,
-                            "found": True,
-                            "type": platform_type,
-                            "details": f"Account association detected (score: {positive_score})"
-                        }
-            except Exception:
-                pass
-            return None
+                method()
+            except Exception as e:
+                print(f"[-] Error in {method.__name__}: {e}")
         
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = [executor.submit(check_social_platform, name, url, ptype, check) for name, url, ptype, check in social_platforms]
-            for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    self.results['sites'].append(result)
-                    if result['type'] in ['social', 'messaging', 'professional']:
-                        self.results['social_profiles'].append({
-                            "platform": result['site'],
-                            "url": result['url'],
-                            "type": result['type']
-                        })
-
-    def breach_intelligence(self):
-        """Advanced breach data intelligence"""
-        breach_services = [
-            ("HaveIBeenPwned", f"https://haveibeenpwned.com/unifiedsearch/{quote_plus(self.international_phone)}"),
-            ("DeHashed", f"https://dehashed.com/search?query={quote_plus(self.international_phone)}"),
-            ("Vigilante.pw", f"https://vigilante.pw/breached-phone/{quote_plus(self.international_phone)}"),
-            ("LeakCheck", f"https://leakcheck.io/search?query={quote_plus(self.international_phone)}"),
-            ("Snusbase", f"https://snusbase.com/search?term={quote_plus(self.international_phone)}"),
-        ]
-        
-        def check_breach_service(service_name, url):
-            try:
-                response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-                if response.status_code == 200:
-                    breach_indicators = [
-                        'password', 'hash', 'breach', 'leak', 'compromised',
-                        'database', 'exposed', 'found', 'results', 'pwned'
-                    ]
-                    
-                    text_lower = response.text.lower()
-                    found_indicators = [ind for ind in breach_indicators if ind in text_lower]
-                    
-                    if found_indicators and 'no results' not in text_lower and 'not found' not in text_lower:
-                        return {
-                            "site": service_name,
-                            "url": url,
-                            "found": True,
-                            "type": "breach",
-                            "details": f"Breach indicators: {', '.join(found_indicators[:3])}"
-                        }
-            except Exception:
-                pass
-            return None
-        
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(check_breach_service, name, url) for name, url in breach_services]
-            for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    self.results['sites'].append(result)
-                    self.results['breach_data'].append(result)
-
-    def advanced_technical_analysis(self):
-        """Comprehensive technical number analysis"""
-        try:
-            # Parse with phonenumbers for detailed analysis
-            parsed = phonenumbers.parse(self.international_phone, None)
-            
-            analysis = {
-                'international_format': phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL),
-                'e164_format': phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164),
-                'national_format': phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL),
-                'country_code': parsed.country_code,
-                'national_number': parsed.national_number,
-                'is_valid': phonenumbers.is_valid_number(parsed),
-                'is_possible': phonenumbers.is_possible_number(parsed),
-                'number_type': str(phonenumbers.number_type(parsed)) if phonenumbers.is_valid_number(parsed) else 'Unknown',
-                'region_code': phonenumbers.region_code_for_number(parsed) if phonenumbers.is_valid_number(parsed) else 'Unknown',
-                'location': phonenumbers.geocoder.description_for_number(parsed, "en") if phonenumbers.is_valid_number(parsed) else 'Unknown',
-                'timezones': phonenumbers.timezone.time_zones_for_number(parsed) if phonenumbers.is_valid_number(parsed) else []
-            }
-            
-            self.results['number_analysis']['technical'] = analysis
-            self.results['location_info']['phonenumbers'] = analysis.get('location', 'Unknown')
-            
-            # Threat analysis
-            threats = []
-            
-            # VOIP detection
-            if analysis.get('number_type') == 'VOIP':
-                threats.append("VOIP number detected")
-            
-            # Premium rate detection
-            premium_prefixes = ['900', '976']
-            if any(self.phone.startswith(prefix) for prefix in premium_prefixes):
-                threats.append("Premium rate number")
-            
-            # Toll-free detection
-            toll_free_prefixes = ['800', '888', '877', '866', '855', '844']
-            if any(self.phone.startswith(prefix) for prefix in toll_free_prefixes):
-                threats.append("Toll-free number")
-            
-            if threats:
-                self.results['threat_intel'].extend(threats)
-                
-        except Exception as e:
-            print(f"Technical analysis error: {e}")
-
-    def run_comprehensive_analysis(self):
-        """Run all advanced phone OSINT checks"""
-        print(f"[+] Starting ADVANCED phone OSINT for: {self.international_phone}")
-        print(f"[+] Original input: {self.original_phone}, Country code: {self.country_code}")
-        
-        analysis_methods = [
-            self.truecaller_advanced,
-            self.numspy_search,
-            self.opencnam_lookup,
-            self.freecarrierlookup_advanced,
-            self.phonevalidator_advanced,
-            self.social_media_deep_search,
-            self.breach_intelligence,
-            self.advanced_technical_analysis,
-        ]
-        
-        # Run all methods in parallel
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(method) for method in analysis_methods]
-            
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"[-] Error in phone analysis: {e}")
-        
-        # Generate comprehensive summary
+        # Generate summary
         total_checks = len(self.results['sites'])
         successful_checks = len([s for s in self.results['sites'] if s['found']])
-        social_count = len(self.results['social_profiles'])
-        breach_count = len(self.results['breach_data'])
         
         self.results['summary'] = {
             "total_services_checked": total_checks,
             "successful_finds": successful_checks,
-            "social_profiles": social_count,
-            "breach_findings": breach_count,
+            "social_profiles": len(self.results['social_profiles']),
             "carrier_info_found": bool(self.results['carrier_info']),
             "location_info_found": bool(self.results['location_info']),
-            "name_identified": 'name' in self.results['number_analysis'],
-            "success_rate": f"{(successful_checks/total_checks*100):.1f}%" if total_checks > 0 else "0%",
-            "threat_indicators": len(self.results['threat_intel']),
-            "formatted_number": self.international_phone
+            "formatted_number": self.results['technical_info'].get('international_format', f"+{self.phone}")
         }
         
-        print(f"[+] ADVANCED Phone OSINT completed:")
-        print(f"    - Services: {successful_checks}/{total_checks} successful")
-        print(f"    - Social: {social_count} profiles") 
-        print(f"    - Breaches: {breach_count} findings")
-        print(f"    - Name identified: {self.results['summary']['name_identified']}")
-        print(f"    - Threat Intel: {len(self.results['threat_intel'])} indicators")
-        
+        print(f"[+] Phone OSINT completed: {successful_checks}/{total_checks} successful")
         return self.results
 
 def run(phone_number, country_code="+1"):
     """
-    Main function to run advanced phone OSINT search
+    Main function to run phone OSINT search
     """
-    if not phone_number or len(phone_number) < 7:
+    if not phone_number or len(str(phone_number).strip()) < 7:
         return {
             "target": phone_number,
             "status": "error",
@@ -608,30 +189,15 @@ def run(phone_number, country_code="+1"):
             "carrier_info": {},
             "location_info": {},
             "social_profiles": [],
-            "breach_data": [],
             "technical_info": {},
-            "threat_intel": [],
-            "number_analysis": {},
-            "error": "Please provide a valid phone number"
+            "error": "Please provide a valid phone number (at least 7 digits)"
         }
     
-    scanner = AdvancedPhoneOSINT(phone_number, country_code)
-    return scanner.run_comprehensive_analysis()
+    scanner = SimplePhoneOSINT(phone_number, country_code)
+    return scanner.run_scan()
 
-# Test function
+# Test
 if __name__ == "__main__":
-    test_phone = "912312122"
-    test_country = "+251"
-    print("Testing ADVANCED phone OSINT search...")
-    results = run(test_phone, test_country)
-    print(f"\n=== SUMMARY ===")
+    results = run("912312122", "+251")
     print(f"Status: {results['status']}")
-    print(f"Formatted: {results['summary']['formatted_number']}")
-    print(f"Successful finds: {results['summary']['successful_finds']}/{results['summary']['total_services_checked']}")
-    print(f"Social profiles: {results['summary']['social_profiles']}")
-    print(f"Breach findings: {results['summary']['breach_findings']}")
-    
-    print(f"\n=== TOP FINDINGS ===")
-    for site in results['sites'][:10]:
-        if site['found']:
-            print(f"  ✓ {site['site']}: {site['details']}")
+    print(f"Results: {len(results['sites'])} sites found")

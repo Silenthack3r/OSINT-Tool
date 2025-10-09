@@ -124,7 +124,6 @@ app.logger.info(f"SECRET source={secret_source} secret_len={secret_len}")
 # Redis support removed; the app uses an in-memory rate limiter.
 redis_client = None
 
-
 # Security headers
 @app.after_request
 def set_security_headers(response):
@@ -133,7 +132,6 @@ def set_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
-
 
 # Expose csrf_token to templates so forms and JS can access it.
 # Must be registered at import/setup time (not during a request).
@@ -281,8 +279,6 @@ def store_scan_results(username, target, target_type, scan_type, results):
     conn.close()
     return scan_id
 
-
-
 # Background pruner for request_counts to prevent unbounded growth. Runs
 # every minute and removes entries older than the window (default 60s).
 def _start_request_counts_pruner(interval_seconds=60, window_seconds=60):
@@ -303,7 +299,6 @@ def _start_request_counts_pruner(interval_seconds=60, window_seconds=60):
 
     t = threading.Thread(target=pruner, daemon=True)
     t.start()
-
 
 # Start the pruner at import time
 _start_request_counts_pruner()
@@ -352,7 +347,6 @@ def login():
 
     return render_template("login.html")
 
-
 @app.before_request
 def _csrf_protect():
     # Only enforce CSRF for state-changing methods
@@ -379,9 +373,7 @@ def _csrf_protect():
             return None
         abort(400, 'Invalid CSRF token')
 
-
     # no-op for other methods
-
 
 @app.route('/_diag')
 def _diag():
@@ -398,7 +390,7 @@ def _diag():
     })
 
 @app.route("/register", methods=["GET", "POST"])
-@rate_limit(max_requests=3, window_seconds=300)
+@rate_limit(max_requests=10, window_seconds=300)
 def register():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -415,7 +407,7 @@ def register():
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
             conn.commit()
-            conn.close()
+            conn.close()  # FIXED: was s.close()
             # Generate CSRF token for the new session (user should login next)
             session['csrf_token'] = uuid.uuid4().hex
             flash("Registration successful! Please login.", "success")
@@ -446,9 +438,7 @@ def logout():
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
 
-
-
-@app.route('/scan', methods=['POST'])
+@app.route("/scan", methods=['POST'])
 @login_required
 @rate_limit(max_requests=100, window_seconds=60)
 def scan():
@@ -470,28 +460,282 @@ def scan():
     results = {}
 
     try:
+        # --- USERNAME CLEAN SCAN ---
         if target_type == "username" and scan_type == "clean":
-            raw_results = user_clean.run(target)
-            sites = []
-            for r in raw_results.get("sites", []):
-                sites.append({
-                    "site": str(r.get("site", "")),
-                    "url": str(r.get("url", "")),
-                    "found": bool(r.get("found", False))
-                })
-                time.sleep(1)
-            
-            results = {
-                "target": str(target),
-                "status": "completed",
-                "sites": sites
-            }
+            try:
+                raw_results = user_clean.run(target)
 
+                # normalize into ask_ai format
+                sites = []
+                for r in raw_results.get("sites", []):
+                    sites.append({
+                        "site": str(r.get("site", "")),
+                        "url": str(r.get("url", "")),
+                        "found": bool(r.get("found", False))
+                    })
 
-        # ... add other scan types here as needed
+                results = {
+                    "target": str(target),
+                    "status": "completed",
+                    "sites": sites
+                }
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error", 
+                    "sites": [],
+                    "error": f"Username search failed: {str(e)}"
+                }
+
+        # --- FULL NAME OSINT SCAN ---
+        elif target_type == "fullname" and scan_type == "clean":
+            try:
+                from scans.fullname import run as fullname_run
+                raw_results = fullname_run(target)
+                
+                # Transform the fullname results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": [],
+                    "error": raw_results.get("error")
+                }
+                
+                # Convert fullname-specific results to the standard sites format
+                if "sites" in raw_results:
+                    results["sites"] = raw_results["sites"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error", 
+                    "sites": [],
+                    "error": f"Full name search failed: {str(e)}"
+                }
+
+        # --- EMAIL OSINT SCAN ---
+        elif target_type == "email" and scan_type == "clean":
+            try:
+                from scans.email import run as email_run
+                raw_results = email_run(target)
+                
+                # Transform the complex email results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": [],
+                    "breaches": [],
+                    "social_profiles": [],
+                    "technical_info": {},
+                    "error": raw_results.get("error")
+                }
+                
+                # Convert email-specific results to the standard sites format
+                if "sites" in raw_results:
+                    results["sites"] = raw_results["sites"]
+                
+                # Add breaches if available
+                if "breaches" in raw_results:
+                    results["breaches"] = raw_results["breaches"]
+                    
+                # Add social profiles if available  
+                if "social_profiles" in raw_results:
+                    results["social_profiles"] = raw_results["social_profiles"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
+                    
+            except Exception as e:
+                app.logger.error(f"Email scan error: {str(e)}", exc_info=True)
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "breaches": [],
+                    "social_profiles": [],
+                    "technical_info": {},
+                    "error": f"Email search failed: {str(e)}"
+                }
+
+        # --- PHONE NUMBER OSINT SCAN ---
+        elif target_type == "phone" and scan_type == "clean":
+            try:
+                print(f"[PHONE SCAN] Starting scan for: {target} with country: {country_code}")
+                
+                from scans.phone import run as phone_run
+                raw_results = phone_run(target, country_code)
+                
+                print(f"[PHONE SCAN] Raw results received: {raw_results.get('status')}")
+                
+                # Simple transformation - just pass through the main structure
+                results = {
+                    "target": str(target),
+                    "status": raw_results.get("status", "completed"),
+                    "sites": raw_results.get("sites", []),
+                    "carrier_info": raw_results.get("carrier_info", {}),
+                    "location_info": raw_results.get("location_info", {}),
+                    "social_profiles": raw_results.get("social_profiles", []),
+                    "technical_info": raw_results.get("technical_info", {}),
+                    "summary": raw_results.get("summary", {}),
+                    "error": raw_results.get("error")
+                }
+                
+                print(f"[PHONE SCAN] Final results: {len(results['sites'])} sites")
+                    
+            except Exception as e:
+                print(f"[PHONE SCAN] ERROR: {str(e)}")
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "carrier_info": {},
+                    "location_info": {},
+                    "social_profiles": [],
+                    "technical_info": {},
+                    "error": f"Phone search failed: {str(e)}"
+                }
+
+        # --- DARK WEB SCAN (Username/Email) ---
+        elif target_type in ["username", "email"] and scan_type == "dark":
+            try:
+                from scans.darkuser import run as darkuser_run
+                raw_results = darkuser_run(target, target_type)
+                
+                # Transform the dark web results to match the expected structure
+                results = {
+                    "target": str(target),
+                    "target_type": target_type,
+                    "status": raw_results.get("status", "completed"),
+                    "darkweb_results": [],
+                    "leaks_found": [],
+                    "breach_data": [],
+                    "onion_service_results": {},
+                    "error": raw_results.get("error")
+                }
+                
+                # Convert dark web specific results
+                if "darkweb_results" in raw_results:
+                    results["darkweb_results"] = raw_results["darkweb_results"]
+                    
+                # Add leaks found if available
+                if "leaks_found" in raw_results:
+                    results["leaks_found"] = raw_results["leaks_found"]
+                    
+                # Add breach data if available
+                if "breach_data" in raw_results:
+                    results["breach_data"] = raw_results["breach_data"]
+                    
+                # Add onion service results if available
+                if "onion_service_results" in raw_results:
+                    results["onion_service_results"] = raw_results["onion_service_results"]
+                    
+                # Add summary information
+                if "summary" in raw_results:
+                    results["summary"] = raw_results["summary"]
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "target_type": target_type,
+                    "status": "error",
+                    "darkweb_results": [],
+                    "leaks_found": [],
+                    "breach_data": [],
+                    "onion_service_results": {},
+                    "summary": {},
+                    "error": f"Dark web search failed: {str(e)}"
+                }
+
+        # --- ONION SCAN ---
+        elif target_type == "onion" and scan_type == "search":
+            try:
+                if search_onion_links:
+                    raw_results = search_onion_links(target)
+                    
+                    # Clean the results
+                    def clean_json(obj):
+                        if obj is None:
+                            return None
+                        elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                            return None
+                        elif isinstance(obj, dict):
+                            return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                        elif isinstance(obj, list):
+                            return [clean_json(item) for item in obj if item is not None]
+                        else:
+                            return obj
+                    
+                    results = clean_json(raw_results)
+                    
+                    # Ensure basic structure
+                    if not isinstance(results, dict):
+                        results = {}
+                    if 'sites' not in results:
+                        results['sites'] = []
+                    if 'target' not in results:
+                        results['target'] = str(target)
+                    if 'status' not in results:
+                        results['status'] = 'completed'
+                else:
+                    results = {
+                        "target": str(target),
+                        "status": "error",
+                        "sites": [],
+                        "error": "Onion search module not available"
+                    }
+                    
+            except Exception as e:
+                results = {
+                    "target": str(target),
+                    "status": "error",
+                    "sites": [],
+                    "error": f"Onion search failed: {str(e)}"
+                }
+
+        # --- OTHER SCAN TYPES ---
+        else:
+            try:
+                module_name = f"scans.{scan_type}"
+                scan_module = importlib.import_module(module_name)
+                if hasattr(scan_module, "run"):
+                    raw_results = scan_module.run(target)
+                    
+                    # Clean the results
+                    def clean_json(obj):
+                        if obj is None:
+                            return None
+                        elif hasattr(obj, '__class__') and 'Undefined' in str(obj.__class__):
+                            return None
+                        elif isinstance(obj, dict):
+                            return {k: clean_json(v) for k, v in obj.items() if v is not None}
+                        elif isinstance(obj, list):
+                            return [clean_json(item) for item in obj if item is not None]
+                        else:
+                            return obj
+                    
+                    results = clean_json(raw_results)
+                    
+                    # Ensure basic structure
+                    if not isinstance(results, dict):
+                        results = {}
+                    if 'sites' not in results:
+                        results['sites'] = []
+                    if 'target' not in results:
+                        results['target'] = str(target)
+                    if 'status' not in results:
+                        results['status'] = 'completed'
+                        
+                else:
+                    results = {"error": f"No 'run' function found in {module_name}"}
+            except Exception as e:
+                results = {"error": str(e)}
 
         # Store results
-        # After storing results
         scan_id = store_scan_results(session["user"], target, target_type, scan_type, results)
         session['last_scan_id'] = scan_id
         cleanup_old_scans()
@@ -508,7 +752,6 @@ def scan():
             recent_scan=safe_results
         )
 
-
     except Exception as e:
         app.logger.error(f"Scan error: {str(e)}", exc_info=True)
         session.pop('csrf_token', None)  # Reset CSRF token to avoid serialization issues
@@ -523,73 +766,92 @@ def scan():
             recent_scan=None
         )
 
-
-
 @app.route("/ask_ai", methods=["POST"])
 @login_required
 @rate_limit(max_requests=10, window_seconds=300)
 def ask_ai():
-    # Ensure content-type is application/json
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 400
-
-    data = request.get_json()
-    question = data.get("question", "").strip()
-
-    if not question or len(question) > 1000:
-        return jsonify({"error": "Invalid question"}), 400
-
-    # Get scan results from database using scan ID
-    if "last_scan_id" not in session:
-        return jsonify({"error": "No scan results found. Run a scan first."}), 400
-
-    scan_results = get_scan_results(session['last_scan_id'], session["user"])
-    if not scan_results:
-        return jsonify({"error": "Scan results not found or expired."}), 400
-
-    sites = scan_results.get("sites", [])
-
-    # Convert scan results into readable text for AI
-    scan_text_lines = []
-    for site in sites:
-        # Fallback to empty dict if site is malformed
-        site = site or {}
-        site_name = site.get("site", "Unknown Site")
-        url = site.get("url", "")
-        found = "Found" if site.get("found") else "Not Found"
-        scan_text_lines.append(f"{site_name}: {found} ({url})")
-
-    scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
-
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant. Use the scan results to answer questions accurately and in very very short way and proffesional as possible and also don forget to make the user aware about cybersecuirty and PII protectin."},
-        {"role": "user", "content": f"Scan Results:\n{scan_text}\nQuestion: {question}"}
-    ]
-
     try:
+        # Get JSON data
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data received"}), 400
+            
+        question = data.get("question", "").strip()
+
+        if not question:
+            return jsonify({"error": "Question is required"}), 400
+
+        if len(question) > 1000:
+            return jsonify({"error": "Question too long"}), 400
+
+        # Get scan results
+        if "last_scan_id" not in session:
+            return jsonify({"error": "No scan results found. Run a scan first."}), 400
+
+        scan_results = get_scan_results(session['last_scan_id'], session["user"])
+        if not scan_results:
+            return jsonify({"error": "Scan results not found or expired."}), 400
+
+        # Prepare scan data for AI
+        sites = scan_results.get("sites", [])
+        scan_text_lines = []
+        
+        for site in sites:
+            site_name = site.get("site", "Unknown Site")
+            url = site.get("url", "")
+            found = "Found" if site.get("found") else "Not Found"
+            scan_text_lines.append(f"{site_name}: {found} ({url})")
+
+        scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
+
+        # Include additional scan data if available
+        if scan_results.get('breaches'):
+            scan_text += f"\nBreaches found: {len(scan_results.get('breaches', []))}"
+        if scan_results.get('social_profiles'):
+            scan_text += f"\nSocial profiles: {len(scan_results.get('social_profiles', []))}"
+        if scan_results.get('summary'):
+            scan_text += f"\nSummary: {scan_results.get('summary')}"
+
+        messages = [
+            {
+                "role": "system", 
+                "content": """You are a cybersecurity OSINT assistant. Provide concise, professional answers about scan results. 
+                Always include brief cybersecurity awareness tips about PII protection. Keep responses under 200 words.
+                Focus on the scan findings and practical security advice."""
+            },
+            {
+                "role": "user", 
+                "content": f"Scan Results:\n{scan_text}\n\nQuestion: {question}\n\nPlease provide a concise answer with relevant cybersecurity tips."
+            }
+        ]
+
+        # Check API key
+        if not OPENROUTER_API_KEY:
+            return jsonify({"error": "AI service not configured"}), 500
+
+        # Call AI API
         completion = client.chat.completions.create(
             model="deepseek/deepseek-chat-v3.1:free",
             messages=messages,
+            max_tokens=300,
             extra_headers={
                 "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
                 "X-Title": "OsintCrowd Dashboard"
             }
         )
 
-        # Access the message safely
         answer = completion.choices[0].message.content
-        # Store AI history in database if needed, or keep minimal in session
+        
+        # Store AI history (optional)
         if "ai_history" not in session:
             session["ai_history"] = []
-        # Keep only last 5 questions to avoid session bloat
         session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
 
         return jsonify({"answer": answer})
 
     except Exception as e:
         app.logger.error(f"AI request failed: {str(e)}", exc_info=True)
-        return jsonify({"error": "AI service unavailable"}), 500
-
+        return jsonify({"error": "AI service temporarily unavailable. Please try again."}), 500
 
 @app.route('/report')
 @login_required
@@ -610,11 +872,4 @@ def report():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-
     app.run(host="0.0.0.0", port=port)
-
-
-
-
-
-
