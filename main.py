@@ -12,6 +12,7 @@ except Exception:
     # Optional module — continue without it and warn
     search_onion_links = None
     print("Warning: scans.test.search_onion_links not available; related features will be disabled.")
+
 import importlib
 import subprocess
 import json
