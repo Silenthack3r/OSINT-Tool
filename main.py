@@ -366,11 +366,26 @@ def _csrf_protect():
         # Accept token in header or form
         header_token = request.headers.get('X-CSRF-Token')
         form_token = request.form.get('csrf_token') if request.form else None
+        json_token = None
+        
+        # Also check JSON requests for ask_ai endpoint
+        if request.endpoint == 'ask_ai' and request.is_json:
+            try:
+                data = request.get_json()
+                json_token = data.get('csrf_token') if data else None
+            except:
+                pass
+        
         if _DEBUG_CSRF:
             # For debugging only: log presence and length, not the full token
-            app.logger.info(f"CSRF debug: session_has_token={bool(token)}, session_len={len(token) if token else 0}, header_present={bool(header_token)}, header_len={len(header_token) if header_token else 0}, form_present={bool(form_token)}, form_len={len(form_token) if form_token else 0}")
-        if header_token == token or form_token == token:
+            app.logger.info(f"CSRF debug: session_has_token={bool(token)}, session_len={len(token) if token else 0}, header_present={bool(header_token)}, header_len={len(header_token) if header_token else 0}, form_present={bool(form_token)}, form_len={len(form_token) if form_token else 0}, json_present={bool(json_token)}, json_len={len(json_token) if json_token else 0}")
+        
+        # Check all possible token locations
+        if (header_token and header_token == token) or \
+           (form_token and form_token == token) or \
+           (json_token and json_token == token):
             return None
+            
         abort(400, 'Invalid CSRF token')
 
     # no-op for other methods
@@ -768,6 +783,8 @@ def ask_ai():
     try:
         print("=== AI ENDPOINT CALLED ===")
         
+        # CSRF is already checked in before_request, so we can proceed
+        
         # Check if request is JSON
         if not request.is_json:
             print("Error: Request is not JSON")
@@ -852,7 +869,7 @@ Scan Results Summary:
                     max_tokens=500,
                     temperature=0.7,
                     extra_headers={
-                        "HTTP-Referer": "https://bnk-osint-tool.onrender.com",  # UPDATE THIS!
+                        "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
                         "X-Title": "CyberRecon Dashboard"
                     }
                 )
