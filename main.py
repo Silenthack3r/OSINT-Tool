@@ -523,29 +523,21 @@ def scan():
                 from scans.email import run as email_run
                 raw_results = email_run(target)
                 
-                # Transform the complex email results to match the expected structure
+                # Use the raw results directly since they already have the correct structure
                 results = {
                     "target": str(target),
                     "status": raw_results.get("status", "completed"),
-                    "sites": [],
-                    "breaches": [],
-                    "social_profiles": [],
-                    "technical_info": {},
+                    "sites": raw_results.get("sites", []),
+                    "breaches": raw_results.get("breaches", []),
+                    "social_profiles": raw_results.get("social_profiles", []),
+                    "technical_info": raw_results.get("technical_info", {}),
+                    "domain_info": raw_results.get("domain_info", {}),
+                    "leaked_data": raw_results.get("leaked_data", []),
+                    "threat_intel": raw_results.get("threat_intel", []),
+                    "reputation_data": raw_results.get("reputation_data", []),
                     "error": raw_results.get("error")
                 }
                 
-                # Convert email-specific results to the standard sites format
-                if "sites" in raw_results:
-                    results["sites"] = raw_results["sites"]
-                
-                # Add breaches if available
-                if "breaches" in raw_results:
-                    results["breaches"] = raw_results["breaches"]
-                    
-                # Add social profiles if available  
-                if "social_profiles" in raw_results:
-                    results["social_profiles"] = raw_results["social_profiles"]
-                    
                 # Add summary information
                 if "summary" in raw_results:
                     results["summary"] = raw_results["summary"]
@@ -559,6 +551,10 @@ def scan():
                     "breaches": [],
                     "social_profiles": [],
                     "technical_info": {},
+                    "domain_info": {},
+                    "leaked_data": [],
+                    "threat_intel": [],
+                    "reputation_data": [],
                     "error": f"Email search failed: {str(e)}"
                 }
 
@@ -767,8 +763,6 @@ def scan():
         )
 
 @app.route("/ask_ai", methods=["POST"])
-@login_required
-@rate_limit(max_requests=10, window_seconds=300)
 def ask_ai():
     try:
         print("=== AI ENDPOINT CALLED ===")
@@ -846,8 +840,13 @@ Scan Results Summary:
                     max_tokens=500,
                     temperature=0.7,
                     extra_headers={
+<<<<<<< HEAD
                         "HTTP-Referer": "http://bnk-osint-tool.onrender.com:5000",
                         "X-Title": "CyberRecon Dashboard"
+=======
+                        "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
+                        "X-Title": "Osintcrowd Dashboard"
+>>>>>>> 223d78fe217ef6b9287c674a6aeef6497b6a0da1
                     }
                 )
                 
