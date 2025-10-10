@@ -840,13 +840,10 @@ Scan Results Summary:
                     max_tokens=500,
                     temperature=0.7,
                     extra_headers={
-<<<<<<< HEAD
-                        "HTTP-Referer": "http://bnk-osint-tool.onrender.com:5000",
+                        "HTTP-Referer": "http://bnk-osint-tool.onrender.com",
                         "X-Title": "CyberRecon Dashboard"
-=======
                         "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
                         "X-Title": "Osintcrowd Dashboard"
->>>>>>> 223d78fe217ef6b9287c674a6aeef6497b6a0da1
                     }
                 )
                 
