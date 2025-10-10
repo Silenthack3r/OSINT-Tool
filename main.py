@@ -771,87 +771,141 @@ def scan():
 @rate_limit(max_requests=10, window_seconds=300)
 def ask_ai():
     try:
+        print("=== AI ENDPOINT CALLED ===")
+        
         # Get JSON data
         data = request.get_json()
         if not data:
-            return jsonify({"error": "No data received"}), 400
+            return jsonify({"error": "No JSON data received"}), 400
             
         question = data.get("question", "").strip()
-
-        if not question:
-            return jsonify({"error": "Question is required"}), 400
-
-        if len(question) > 1000:
-            return jsonify({"error": "Question too long"}), 400
-
-        # Get scan results
-        if "last_scan_id" not in session:
-            return jsonify({"error": "No scan results found. Run a scan first."}), 400
-
-        scan_results = get_scan_results(session['last_scan_id'], session["user"])
-        if not scan_results:
-            return jsonify({"error": "Scan results not found or expired."}), 400
-
-        # Prepare scan data for AI
-        sites = scan_results.get("sites", [])
-        scan_text_lines = []
+        print(f"Question: {question}")
         
-        for site in sites:
-            site_name = site.get("site", "Unknown Site")
-            url = site.get("url", "")
-            found = "Found" if site.get("found") else "Not Found"
-            scan_text_lines.append(f"{site_name}: {found} ({url})")
+        if not question:
+            return jsonify({"error": "No question provided"}), 400
 
-        scan_text = f"Target: {scan_results.get('target', '')}\nStatus: {scan_results.get('status', '')}\n" + "\n".join(scan_text_lines)
+        # Check if user has scan results
+        if "last_scan_id" not in session:
+            return jsonify({"error": "No scan results found. Please run a scan first."}), 400
 
-        # Include additional scan data if available
-        if scan_results.get('breaches'):
-            scan_text += f"\nBreaches found: {len(scan_results.get('breaches', []))}"
-        if scan_results.get('social_profiles'):
-            scan_text += f"\nSocial profiles: {len(scan_results.get('social_profiles', []))}"
-        if scan_results.get('summary'):
-            scan_text += f"\nSummary: {scan_results.get('summary')}"
+        # Get scan results from database
+        scan_id = session['last_scan_id']
+        username = session["user"]
+        
+        scan_results = get_scan_results(scan_id, username)
+        if not scan_results:
+            return jsonify({"error": "Scan results not found or expired. Please run a new scan."}), 400
 
+        # Build context from scan results
+        context = f"""
+Scan Results Summary:
+- Target: {scan_results.get('target', 'N/A')}
+- Status: {scan_results.get('status', 'N/A')}
+- Sites Checked: {len(scan_results.get('sites', []))}
+"""
+
+        sites = scan_results.get('sites', [])
+        if sites:
+            context += "\nSite Results:\n"
+            for i, site in enumerate(sites[:10], 1):
+                site_name = site.get('site', f'Site {i}')
+                found = "FOUND" if site.get('found') else "NOT FOUND"
+                url = site.get('url', 'No URL')
+                context += f"{i}. {site_name}: {found} - {url}\n"
+
+        # Prepare messages for AI
         messages = [
             {
                 "role": "system", 
-                "content": """You are a cybersecurity OSINT assistant. Provide concise, professional answers about scan results. 
-                Always include brief cybersecurity awareness tips about PII protection. Keep responses under 200 words.
-                Focus on the scan findings and practical security advice."""
+                "content": "You are a cybersecurity assistant. Analyze the scan results and provide helpful, professional answers. Keep responses concise but informative."
             },
             {
                 "role": "user", 
-                "content": f"Scan Results:\n{scan_text}\n\nQuestion: {question}\n\nPlease provide a concise answer with relevant cybersecurity tips."
+                "content": f"{context}\n\nQuestion: {question}\n\nPlease provide a helpful answer based on the scan results above:"
             }
         ]
 
-        # Check API key
-        if not OPENROUTER_API_KEY:
-            return jsonify({"error": "AI service not configured"}), 500
-
-        # Call AI API
-        completion = client.chat.completions.create(
-            model="deepseek/deepseek-chat-v3.1:free",
-            messages=messages,
-            max_tokens=300,
-            extra_headers={
-                "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
-                "X-Title": "OsintCrowd Dashboard"
-            }
-        )
-
-        answer = completion.choices[0].message.content
+        print("Sending request to AI...")
         
-        # Store AI history (optional)
-        if "ai_history" not in session:
-            session["ai_history"] = []
-        session["ai_history"] = session["ai_history"][-4:] + [{"question": question, "answer": answer}]
+        # Try multiple WORKING models
+        models_to_try = [
+            "meta-llama/llama-3.3-70b-instruct:free",  # Newer Llama model
+            "meta-llama/llama-3.1-8b-instruct:free",   # Smaller but reliable
+            "qwen/qwen-2.5-coder-32b-instruct:free",   # Good coding/analysis
+            "microsoft/wizardlm-2-8x22b:free"          # Another good option
+        ]
+        
+        last_error = None
+        
+        for model in models_to_try:
+            try:
+                print(f"Trying model: {model}")
+                completion = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=500,
+                    temperature=0.7,
+                    extra_headers={
+                        "HTTP-Referer": "http://bnk-osint-tool.onrender.com:5000",
+                        "X-Title": "CyberRecon Dashboard"
+                    }
+                )
+                
+                # Check if response is valid
+                if (completion and 
+                    hasattr(completion, 'choices') and 
+                    completion.choices and 
+                    len(completion.choices) > 0 and
+                    hasattr(completion.choices[0], 'message') and
+                    completion.choices[0].message and
+                    hasattr(completion.choices[0].message, 'content') and
+                    completion.choices[0].message.content):
+                    
+                    answer = completion.choices[0].message.content
+                    print(f"Success with model: {model}")
+                    print(f"Response: {answer[:100]}...")
+                    
+                    # Store in session
+                    if "ai_history" not in session:
+                        session["ai_history"] = []
+                    
+                    session["ai_history"] = session["ai_history"][-2:] + [{
+                        "question": question, 
+                        "answer": answer,
+                        "timestamp": datetime.now().isoformat(),
+                        "model": model
+                    }]
+                    
+                    session.modified = True
 
-        return jsonify({"answer": answer})
+                    return jsonify({
+                        "answer": answer,
+                        "scan_target": scan_results.get('target'),
+                        "sites_analyzed": len(sites),
+                        "model": model
+                    })
+                else:
+                    raise Exception("Invalid response structure from AI")
+                
+            except Exception as e:
+                last_error = e
+                print(f"Model {model} failed: {str(e)}")
+                continue  # Try next model
+        
+        # If all models failed
+        error_msg = f"All AI models are currently unavailable. Please try again in a few minutes. Last error: {str(last_error)}"
+        return jsonify({"error": error_msg}), 500
 
     except Exception as e:
-        app.logger.error(f"AI request failed: {str(e)}", exc_info=True)
-        return jsonify({"error": "AI service temporarily unavailable. Please try again."}), 500
+        print(f"AI ROUTE ERROR: {str(e)}")
+        return jsonify({"error": f"AI service error: {str(e)}"}), 500
+def test_ai():
+    """Test if AI endpoint is accessible"""
+    return jsonify({
+        "status": "AI endpoint is working",
+        "session_user": session.get("user", "No user"),
+        "last_scan_id": session.get("last_scan_id", "No scan ID")
+    })
 
 @app.route('/report')
 @login_required
