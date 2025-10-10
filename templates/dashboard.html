@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>CyberRecon Dashboard</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <style>
         .clickable-link {
@@ -802,22 +803,37 @@
         responseBox.scrollTop = responseBox.scrollHeight;
 
         try {
+            // Get CSRF token - FIXED METHOD
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || 
+                             document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                             '';
+
+            console.log("CSRF Token:", csrfToken ? "Found" : "Missing");
+
             const response = await fetch("/ask_ai", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-CSRFToken": document.querySelector('input[name="csrf_token"]').value
+                    "X-CSRFToken": csrfToken
                 },
-                body: JSON.stringify({ question: question })
+                body: JSON.stringify({ 
+                    question: question,
+                    csrf_token: csrfToken  // Also send in body for double protection
+                })
             });
+
+            console.log("Response status:", response.status);
 
             // Check if response is JSON
             const contentType = response.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("Server returned non-JSON response");
+                const text = await response.text();
+                console.error("Non-JSON response:", text.substring(0, 200));
+                throw new Error(`Server returned HTML instead of JSON. Status: ${response.status}`);
             }
 
             const data = await response.json();
+            console.log("AI Response data:", data);
 
             if (!response.ok) {
                 throw new Error(data.error || `Request failed with status ${response.status}`);
