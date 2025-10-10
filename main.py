@@ -893,6 +893,8 @@ Scan Results Summary:
     except Exception as e:
         print(f"AI ROUTE ERROR: {str(e)}")
         return jsonify({"error": f"AI service error: {str(e)}"}), 500
+
+@app.route("/test_ai")  # FIXED: Added missing route decorator
 def test_ai():
     """Test if AI endpoint is accessible"""
     return jsonify({
