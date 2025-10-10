@@ -763,17 +763,15 @@ def scan():
         )
 
 @app.route("/ask_ai", methods=["POST"])
+@login_required
 def ask_ai():
     try:
-        print("=== AI ENDPOINT CALLED ===")
-        
-        # Get JSON data
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data received"}), 400
+        # Ensure we're getting JSON
+        if not request.is_json:
+            return jsonify({"error": "Request must be JSON"}), 400
             
+        data = request.get_json()
         question = data.get("question", "").strip()
-        print(f"Question: {question}")
         
         if not question:
             return jsonify({"error": "No question provided"}), 400
@@ -782,22 +780,17 @@ def ask_ai():
         if "last_scan_id" not in session:
             return jsonify({"error": "No scan results found. Please run a scan first."}), 400
 
-        # Get scan results from database
+        # Get scan results
         scan_id = session['last_scan_id']
         username = session["user"]
-        
         scan_results = get_scan_results(scan_id, username)
+        
         if not scan_results:
             return jsonify({"error": "Scan results not found or expired. Please run a new scan."}), 400
 
-        # Build context from scan results
-        context = f"""
-Scan Results Summary:
-- Target: {scan_results.get('target', 'N/A')}
-- Status: {scan_results.get('status', 'N/A')}
-- Sites Checked: {len(scan_results.get('sites', []))}
-"""
-
+        # Build context (your existing code)
+        context = f"Scan Results Summary:\n- Target: {scan_results.get('target', 'N/A')}\n- Status: {scan_results.get('status', 'N/A')}\n- Sites Checked: {len(scan_results.get('sites', []))}"
+        
         sites = scan_results.get('sites', [])
         if sites:
             context += "\nSite Results:\n"
@@ -807,7 +800,7 @@ Scan Results Summary:
                 url = site.get('url', 'No URL')
                 context += f"{i}. {site_name}: {found} - {url}\n"
 
-        # Prepare messages for AI
+        # Prepare messages
         messages = [
             {
                 "role": "system", 
@@ -819,45 +812,28 @@ Scan Results Summary:
             }
         ]
 
-        print("Sending request to AI...")
-        
-        # Try multiple WORKING models
+        # Try AI models
         models_to_try = [
-            "meta-llama/llama-3.3-70b-instruct:free",  # Newer Llama model
-            "meta-llama/llama-3.1-8b-instruct:free",   # Smaller but reliable
-            "qwen/qwen-2.5-coder-32b-instruct:free",   # Good coding/analysis
-            "microsoft/wizardlm-2-8x22b:free"          # Another good option
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "qwen/qwen-2.5-coder-32b-instruct:free"
         ]
-        
-        last_error = None
         
         for model in models_to_try:
             try:
-                print(f"Trying model: {model}")
                 completion = client.chat.completions.create(
                     model=model,
                     messages=messages,
                     max_tokens=500,
                     temperature=0.7,
                     extra_headers={
-                        "HTTP-Referer": "http://bnk-osint-tool.onrender.com",
+                        "HTTP-Referer": "https://your-app.onrender.com",  # UPDATE THIS!
                         "X-Title": "CyberRecon Dashboard"
                     }
                 )
                 
-                # Check if response is valid
-                if (completion and 
-                    hasattr(completion, 'choices') and 
-                    completion.choices and 
-                    len(completion.choices) > 0 and
-                    hasattr(completion.choices[0], 'message') and
-                    completion.choices[0].message and
-                    hasattr(completion.choices[0].message, 'content') and
-                    completion.choices[0].message.content):
-                    
+                if completion and completion.choices and completion.choices[0].message.content:
                     answer = completion.choices[0].message.content
-                    print(f"Success with model: {model}")
-                    print(f"Response: {answer[:100]}...")
                     
                     # Store in session
                     if "ai_history" not in session:
@@ -875,23 +851,17 @@ Scan Results Summary:
                     return jsonify({
                         "answer": answer,
                         "scan_target": scan_results.get('target'),
-                        "sites_analyzed": len(sites),
-                        "model": model
+                        "sites_analyzed": len(sites)
                     })
-                else:
-                    raise Exception("Invalid response structure from AI")
-                
+                    
             except Exception as e:
-                last_error = e
                 print(f"Model {model} failed: {str(e)}")
-                continue  # Try next model
+                continue
         
-        # If all models failed
-        error_msg = f"All AI models are currently unavailable. Please try again in a few minutes. Last error: {str(last_error)}"
-        return jsonify({"error": error_msg}), 500
+        return jsonify({"error": "All AI models are currently unavailable. Please try again later."}), 503
 
     except Exception as e:
-        print(f"AI ROUTE ERROR: {str(e)}")
+        print(f"AI route error: {str(e)}")
         return jsonify({"error": f"AI service error: {str(e)}"}), 500
 
 @app.route("/test_ai")  # FIXED: Added missing route decorator

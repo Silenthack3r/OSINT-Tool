@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Osint Crowd Dashboard</title>
+    <title>CyberRecon Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
     <style>
         .clickable-link {
@@ -58,48 +58,6 @@
             margin: 5px 0;
             padding: 5px;
         }
-        /* Chat Message Styles */
-        .chat-message {
-            display: inline-block;
-            margin: 8px 0;
-            padding: 12px 16px;
-            border-radius: 18px;
-            max-width: 85%;
-            word-wrap: break-word;
-            font-weight: 500;
-            line-height: 1.5;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            animation: messageSlide 0.3s ease-out;
-        }
-        @keyframes messageSlide {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .chat-message.user {
-            background: linear-gradient(135deg, #1e90ff, #0d6efd);
-            color: white;
-            margin-left: auto;
-            text-align: right;
-            border-bottom-right-radius: 6px;
-        }
-        .chat-message.ai {
-            background: #f8fafc;
-            color: #1e293b;
-            margin-right: auto;
-            text-align: left;
-            border-bottom-left-radius: 6px;
-            border: 1px solid #e2e8f0;
-        }
-        .risk-high { color: #ef4444; font-weight: bold; }
-        .risk-medium { color: #f59e0b; font-weight: bold; }
-        .risk-low { color: #10b981; font-weight: bold; }
-        
         /* Team Section Styles */
         .team-section {
             margin: 60px auto 40px;
@@ -204,6 +162,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Interactive Background Elements -->
     <div class="interactive-bg">
@@ -220,11 +179,11 @@
         <h2 class="welcome-text">Welcome, <span>{{username}}</span></h2>
         <div class="settings-container">
             <div class="settings-icon">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
-        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-    </svg>
-</div>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+            </div>
             <div class="dropdown">
                 <a href="/report" class="report-link">View Report</a>
                 <a href="/logout">Logout</a>
@@ -451,11 +410,29 @@
                 <option value="dark">Dark Web</option>
             </select>
             
-            <button type="submit" class="scan-btn" id="scanBtn">
-                <span id="scanText">🚀 Start Scan</span>
-                <div id="scanSpinner" class="spinner" style="display: none;"></div>
-            </button>
+            <button type="submit" class="scan-btn">🚀 Start Scan</button>
         </form>
+
+        <script>
+        function toggleCountryCode() {
+            const targetType = document.getElementById('targetTypeSelect').value;
+            const countryCodeSelect = document.getElementById('countryCodeSelect');
+            const targetInput = document.getElementById('targetInput');
+            
+            if (targetType === 'phone') {
+                countryCodeSelect.style.display = 'block';
+                targetInput.placeholder = "Enter phone number (e.g., 912312122)";
+            } else {
+                countryCodeSelect.style.display = 'none';
+                targetInput.placeholder = "Enter Target";
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleCountryCode();
+        });
+        </script>
 
         <!-- Scan Results Container (Terminal Style) -->
         <div class="scan-results-container">
@@ -465,15 +442,11 @@
                 <span class="dot green"></span>
                 <span class="term-title">Scan Terminal</span>
                 {% if results %}
-                <div class="terminal-actions">
-                    <a href="/report" class="report-btn">📊 View Report</a>
-                    <button onclick="downloadResults()" class="download-btn">📥 Download</button>
-                </div>
+                <a href="/report" class="report-btn">📊 View Full Report</a>
                 {% endif %}
             </div>
             <div class="terminal-body" id="scan-results">
                 {% if results %}
-                    <!-- Your existing results display code remains the same -->
                     {% if results.status %}
                     <div class="scan-status status-{{ results.status }}">
                         <strong>Scan Status:</strong> {{ results.status|upper }}<br>
@@ -529,7 +502,7 @@
                     </ul>
                     {% endif %}
 
-                    <!-- Your other result displays remain the same -->
+                    <!-- Dark Web Results -->
                     {% if results.darkweb_results %}
                     <h3 class="prompt">Dark Web Results:</h3>
                     <ul class="sites-list">
@@ -548,6 +521,44 @@
                         </li>
                         {% endfor %}
                     </ul>
+                    {% endif %}
+
+                    <!-- Leaks Found -->
+                    {% if results.leaks_found %}
+                    <h3 class="prompt">Leaks Found:</h3>
+                    <ul class="sites-list">
+                        {% for leak in results.leaks_found %}
+                        <li class="site-item found-item">
+                            <strong>{{ leak.source }}:</strong>
+                            {{ leak.username }}@{{ leak.domain }}
+                            <span class="type-badge leak">LEAK</span>
+                            <span class="status-badge">✓ FOUND</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Onion Service Results -->
+                    {% if results.onion_service_results %}
+                    <h3 class="prompt">Onion Service Results:</h3>
+                    <ul class="sites-list">
+                        {% for service, result in results.onion_service_results.items() %}
+                        <li class="site-item {% if result.found %}found-item{% else %}not-found-item{% endif %}">
+                            <strong>{{ service }}:</strong>
+                            {{ result.details }}
+                            <span class="status-badge">{% if result.found %}✓ FOUND{% else %}✗ NOT FOUND{% endif %}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Generic Results Display -->
+                    {% if not results.sites and not results.darkweb_results and not results.leaks_found and not results.onion_service_results and not results.error %}
+                    <h3 class="prompt">Scan Results for "{{target}}":</h3>
+                    <div class="scan-status status-completed">
+                        <strong>Scan completed but no specific results to display.</strong><br>
+                        Check the summary above for details.
+                    </div>
                     {% endif %}
 
                 {% elif recent_scan %}
@@ -582,7 +593,6 @@
         </div>
 
     </div>
-
     <div class="pii-awareness-section">
         <h2 class="pii-title">PII Protection Awareness</h2>
         <p class="pii-subtitle">Understanding Your Digital Footprint</p>
@@ -755,237 +765,171 @@
 
     <!-- Footer -->
     <footer class="footer">
-        <p>© 2025 CyberRecon — Created by Team Red Hunters | All Rights Reserved</p>
+        <p>© 2025 CyberRecon — Created by Team BNKY Four | All Rights Reserved</p>
     </footer>
 
-    <!-- Fullscreen Loading Overlay -->
-    <div id="fullscreenLoading" class="loading-overlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <h3 class="loading-title">OSINT Scan in Progress</h3>
-            <p class="loading-text">Scanning: <span id="loadingTarget" class="target-name"></span></p>
-            <p class="loading-subtext">This may take 10-30 seconds</p>
-        </div>
-    </div>
-
     <script>
-        // Country code toggle function
-        function toggleCountryCode() {
-            const targetType = document.getElementById('targetTypeSelect').value;
-            const countryCodeSelect = document.getElementById('countryCodeSelect');
-            const targetInput = document.getElementById('targetInput');
-            
-            if (targetType === 'phone') {
-                countryCodeSelect.style.display = 'block';
-                targetInput.placeholder = "Enter phone number (e.g., 912312122)";
-            } else {
-                countryCodeSelect.style.display = 'none';
-                targetInput.placeholder = "Enter Target";
-            }
-        }
+    // FIXED AI Form Handler
+    document.getElementById("ai-form").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const questionInput = document.getElementById("ai-input");
+        const question = questionInput.value.trim();
+        const responseBox = document.getElementById("ai-response");
 
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            toggleCountryCode();
-            
-            // Interactive Background Effects
-            const orb1 = document.getElementById('orb1');
-            const orb2 = document.getElementById('orb2');
-            const orb3 = document.getElementById('orb3');
-            const orb4 = document.getElementById('orb4');
-            const mouseFollower = document.getElementById('mouseFollower');
-            
-            let mouseX = 0;
-            let mouseY = 0;
-            let followerX = 0;
-            let followerY = 0;
-            
-            // Mouse move listener
-            document.addEventListener('mousemove', (e) => {
-                mouseX = e.clientX;
-                mouseY = e.clientY;
-                
-                // Move orbs with parallax effect
-                if (orb1) orb1.style.transform = `translate(${(mouseX - window.innerWidth/2) * 0.02}px, ${(mouseY - window.innerHeight/2) * 0.02}px)`;
-                if (orb2) orb2.style.transform = `translate(${(mouseX - window.innerWidth/2) * -0.03}px, ${(mouseY - window.innerHeight/2) * -0.03}px)`;
-                if (orb3) orb3.style.transform = `translate(${(mouseX - window.innerWidth/2) * 0.04}px, ${(mouseY - window.innerHeight/2) * -0.02}px)`;
-                if (orb4) orb4.style.transform = `translate(${(mouseX - window.innerWidth/2) * -0.02}px, ${(mouseY - window.innerHeight/2) * 0.04}px)`;
-            });
-            
-            // Smooth mouse follower
-            function animateFollower() {
-                followerX += (mouseX - followerX) * 0.1;
-                followerY += (mouseY - followerY) * 0.1;
-                
-                if (mouseFollower) {
-                    mouseFollower.style.left = followerX + 'px';
-                    mouseFollower.style.top = followerY + 'px';
-                }
-                
-                requestAnimationFrame(animateFollower);
-            }
-            
-            animateFollower();
+        if (!question) return;
 
-            // Fullscreen loading overlay
-            document.getElementById("scanForm").addEventListener("submit", function(e) {
-                const targetInput = document.getElementById("targetInput").value;
-                const targetType = document.getElementById("targetTypeSelect").value;
-                
-                // Update loading text with target info
-                document.getElementById("loadingTarget").textContent = targetInput;
-                
-                // Show fullscreen overlay
-                document.getElementById("fullscreenLoading").style.display = "flex";
-                
-                // Also update button state
-                const scanBtn = document.getElementById("scanBtn");
-                const scanText = document.getElementById("scanText");
-                const scanSpinner = document.getElementById("scanSpinner");
-                
-                scanBtn.disabled = true;
-                scanText.textContent = "Scanning...";
-                if (scanSpinner) scanSpinner.style.display = "inline-block";
-                
-                // Clear any existing results to show fresh loading state
-                const scanResults = document.getElementById("scan-results");
-                scanResults.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #64748b;">
-                        <p>Starting scan... Please wait</p>
-                    </div>
-                `;
-            });
+        // Disable form
+        questionInput.disabled = true;
+        document.querySelector("#ai-form button").disabled = true;
 
-            // Hide loading overlay when page loads (in case of back button)
-            document.getElementById("fullscreenLoading").style.display = "none";
-            
-            // Reset button state
-            const scanBtn = document.getElementById("scanBtn");
-            const scanText = document.getElementById("scanText");
-            const scanSpinner = document.getElementById("scanSpinner");
-            
-            if (scanBtn) scanBtn.disabled = false;
-            if (scanText) scanText.textContent = "🚀 Start Scan";
-            if (scanSpinner) scanSpinner.style.display = "none";
+        // Clear previous messages
+        const existingMessages = responseBox.querySelectorAll('.chat-message');
+        existingMessages.forEach(msg => msg.remove());
 
-            // Also hide loading if user goes back
-            window.addEventListener('pageshow', function() {
-                document.getElementById("fullscreenLoading").style.display = "none";
-            });
+        // Add user message
+        const userMsg = document.createElement("div");
+        userMsg.className = "chat-message user-message";
+        userMsg.innerHTML = `<strong>You:</strong> ${question}`;
+        responseBox.appendChild(userMsg);
 
-            // Enable form if scan results become available
-            function checkScanResults() {
-                const hasResults = {{ (results or recent_scan)|tojson|safe }};
-                const aiInput = document.getElementById("ai-input");
-                const aiButton = document.querySelector("#ai-form button");
-                
-                if (hasResults && hasResults !== 'null') {
-                    aiInput.disabled = false;
-                    aiButton.disabled = false;
-                    aiInput.placeholder = "Ask AI about the scan results...";
-                }
-            }
+        // Add AI thinking message
+        const aiMsg = document.createElement("div");
+        aiMsg.className = "chat-message ai-message";
+        aiMsg.innerHTML = `<strong>AI:</strong> <em>Thinking...</em>`;
+        responseBox.appendChild(aiMsg);
 
-            // Check on page load
-            checkScanResults();
-        });
+        // Scroll to bottom
+        responseBox.scrollTop = responseBox.scrollHeight;
 
-        // Download Results Function
-        function downloadResults() {
-            // Get all the text from scan results
-            const resultsElement = document.getElementById('scan-results');
-            const resultsText = resultsElement.innerText;
-            
-            // Get target name for filename
-            const target = '{{ target|default("scan") }}';
-            const timestamp = new Date().toLocaleString().replace(/[/:, ]/g, '-');
-            
-            // Create filename
-            const filename = `osint-scan-${target}-${timestamp}.txt`;
-            
-            // Create and download file
-            const blob = new Blob([resultsText], { type: 'text/plain' });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-        }
-
-        // FIXED AI Form Handler - Using the working version from your local file
-        document.getElementById("ai-form").addEventListener("submit", async function(e) {
-            e.preventDefault();
-            const questionInput = document.getElementById("ai-input");
-            const question = questionInput.value.trim();
-            const responseBox = document.getElementById("ai-response");
-
-            if (!question) return;
-
-            // Disable form during request
-            questionInput.disabled = true;
-            document.querySelector("#ai-form button").disabled = true;
-
-            // Clear previous messages except the first waiting message
-            const existingMessages = responseBox.querySelectorAll('.chat-message');
-            if (existingMessages.length > 0) {
-                existingMessages.forEach(msg => msg.remove());
-            }
-
-            // Add user message
-            const userMsg = document.createElement("div");
-            userMsg.className = "chat-message user-message";
-            userMsg.innerHTML = `<strong>You:</strong> ${question}`;
-            responseBox.appendChild(userMsg);
-
-            // Add AI thinking message
-            const aiMsg = document.createElement("div");
-            aiMsg.className = "chat-message ai-message";
-            aiMsg.innerHTML = `<strong>AI:</strong> <em>Thinking...</em>`;
-            responseBox.appendChild(aiMsg);
-
-            // Scroll to bottom
-            responseBox.scrollTop = responseBox.scrollHeight;
-
-            try {
-                console.log("Sending AI request...");
-                
-                const response = await fetch("/ask_ai", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
+        try {
+            const response = await fetch("/ask_ai", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
                     "X-CSRFToken": document.querySelector('input[name="csrf_token"]').value
-                    },
-                    body: JSON.stringify({ question: question })
-                });
+                },
+                body: JSON.stringify({ question: question })
+            });
 
-                const data = await response.json();
-                console.log("AI Response:", data);
-
-                if (!response.ok) {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                }
-
-                // Update AI message with response
-                aiMsg.innerHTML = `<strong>AI:</strong> ${data.answer}`;
-                
-            } catch (error) {
-                console.error("AI Request failed:", error);
-                aiMsg.innerHTML = `<strong>AI:</strong> <span style="color: #ff4444;">Error: ${error.message}</span>`;
-            } finally {
-                // Re-enable form
-                questionInput.disabled = false;
-                document.querySelector("#ai-form button").disabled = false;
-                questionInput.value = "";
-                questionInput.focus();
-                
-                // Scroll to bottom again
-                responseBox.scrollTop = responseBox.scrollHeight;
+            // Check if response is JSON
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Server returned non-JSON response");
             }
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || `Request failed with status ${response.status}`);
+            }
+
+            // Update AI message
+            aiMsg.innerHTML = `<strong>AI:</strong> ${data.answer}`;
+            
+        } catch (error) {
+            console.error("AI Request failed:", error);
+            aiMsg.innerHTML = `<strong>AI:</strong> <span style="color: #ff4444;">Error: ${error.message}</span>`;
+        } finally {
+            // Re-enable form
+            questionInput.disabled = false;
+            document.querySelector("#ai-form button").disabled = false;
+            questionInput.value = "";
+            questionInput.focus();
+            
+            responseBox.scrollTop = responseBox.scrollHeight;
+        }
+    });
+
+    // Interactive Background Effects
+    document.addEventListener('DOMContentLoaded', function() {
+        const orb1 = document.getElementById('orb1');
+        const orb2 = document.getElementById('orb2');
+        const orb3 = document.getElementById('orb3');
+        const orb4 = document.getElementById('orb4');
+        const mouseFollower = document.getElementById('mouseFollower');
+        
+        let mouseX = 0;
+        let mouseY = 0;
+        let followerX = 0;
+        let followerY = 0;
+        
+        // Mouse move listener
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Move orbs with parallax effect
+            if (orb1) orb1.style.transform = `translate(${(mouseX - window.innerWidth/2) * 0.02}px, ${(mouseY - window.innerHeight/2) * 0.02}px)`;
+            if (orb2) orb2.style.transform = `translate(${(mouseX - window.innerWidth/2) * -0.03}px, ${(mouseY - window.innerHeight/2) * -0.03}px)`;
+            if (orb3) orb3.style.transform = `translate(${(mouseX - window.innerWidth/2) * 0.04}px, ${(mouseY - window.innerHeight/2) * -0.02}px)`;
+            if (orb4) orb4.style.transform = `translate(${(mouseX - window.innerWidth/2) * -0.02}px, ${(mouseY - window.innerHeight/2) * 0.04}px)`;
         });
+        
+        // Smooth mouse follower
+        function animateFollower() {
+            followerX += (mouseX - followerX) * 0.1;
+            followerY += (mouseY - followerY) * 0.1;
+            
+            if (mouseFollower) {
+                mouseFollower.style.left = followerX + 'px';
+                mouseFollower.style.top = followerY + 'px';
+            }
+            
+            requestAnimationFrame(animateFollower);
+        }
+        
+        animateFollower();
+        
+        // Create floating particles
+        function createParticles() {
+            const particlesContainer = document.querySelector('.interactive-bg');
+            if (!particlesContainer) return;
+            
+            for (let i = 0; i < 15; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.top = Math.random() * 100 + 'vh';
+                particle.style.animationDelay = Math.random() * 3 + 's';
+                particle.style.animationDuration = (3 + Math.random() * 2) + 's';
+                particlesContainer.appendChild(particle);
+            }
+        }
+        
+        createParticles();
+        
+        // Interactive hover effects on cards
+        const interactiveElements = document.querySelectorAll('.scan-results-container, .ai-box, .scan-form');
+        
+        interactiveElements.forEach(element => {
+            element.addEventListener('mouseenter', () => {
+                element.style.transform = 'translateY(-2px)';
+                element.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+            });
+            
+            element.addEventListener('mouseleave', () => {
+                element.style.transform = 'translateY(0)';
+                element.style.boxShadow = '';
+            });
+        });
+
+        // Enable form if scan results become available
+        function checkScanResults() {
+            const hasResults = {{ (results or recent_scan)|tojson|safe }};
+            const aiInput = document.getElementById("ai-input");
+            const aiButton = document.querySelector("#ai-form button");
+            
+            if (hasResults && hasResults !== 'null') {
+                aiInput.disabled = false;
+                aiButton.disabled = false;
+                aiInput.placeholder = "Ask AI about the scan results...";
+            }
+        }
+        
+        // Check on page load
+        checkScanResults();
+    });
     </script>
+
 </body>
 </html>
