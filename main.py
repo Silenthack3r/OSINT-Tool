@@ -842,8 +842,6 @@ Scan Results Summary:
                     extra_headers={
                         "HTTP-Referer": "http://bnk-osint-tool.onrender.com",
                         "X-Title": "CyberRecon Dashboard"
-                        "HTTP-Referer": "https://bnk-osint-tool.onrender.com",
-                        "X-Title": "Osintcrowd Dashboard"
                     }
                 )
                 
