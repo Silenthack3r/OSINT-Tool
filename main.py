@@ -855,7 +855,8 @@ Scan Results Summary:
         models_to_try = [
             "meta-llama/llama-3.3-70b-instruct:free",
             "meta-llama/llama-3.1-8b-instruct:free",
-            "qwen/qwen-2.5-coder-32b-instruct:free"
+            "qwen/qwen-2.5-coder-32b-instruct:free",
+            "deepseek/deepseek-chat-v3.1:free"
         ]
         
         last_error = None
